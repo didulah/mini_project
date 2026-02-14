@@ -144,28 +144,4 @@ if __name__ == '__main__':
     init_db()  # create tables + sample data on startup
     print("Server running! Open http://127.0.0.1:5000 in your browser")
     app.run(debug=True)
-```
 
----
-
-## What this file does — simply explained
-
-Think of `app.py` as a **waiter in a restaurant:**
-- `init_db()` — sets up the tables when the restaurant first opens
-- `index()` — shows the menu (search form)
-- `search()` — takes the order (student ID) and brings back the result
-- `add_record()` — the fingerprint scanner calls this to log attendance
-- `add_student()` — lets you add new students to the system
-
----
-
-## Step 4 — Run it to test
-
-In the VSCode terminal, type:
-```
-python app.py
-```
-
-You should see:
-```
-Server running! Open http://127.0.0.1:5000 in your browser
