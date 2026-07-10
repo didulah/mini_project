@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Attendance System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <span class="brand">Fingerprint Attendance System</span>
+        {% if session.get('lecturer_id') %}
+            <nav>
+                <span>{{ session.get('lecturer_name') }}</span>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </nav>
+        {% endif %}
+    </header>
+
+    <main class="content">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flashes">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
