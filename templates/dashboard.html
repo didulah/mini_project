@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+    <h1>Today's lectures ({{ today }})</h1>
+
+    {% if lectures %}
+        <ul class="lecture-list">
+            {% for lec in lectures %}
+                <li>
+                    {{ lec.subject.subject_name }} ({{ lec.start_time }} - {{ lec.end_time }})
+                    <!-- TODO: link to /session/start/<timetable_id> once implemented -->
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No lectures scheduled for today.</p>
+    {% endif %}
+{% endblock %}
