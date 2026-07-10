@@ -1,0 +1,121 @@
+"""
+SQLAlchemy models - directly mirrors schema.sql
+(students, lecturers, subjects, enrollments, timetable,
+lecture_sessions, attendance_records)
+"""
+from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from extensions import db
+
+
+class Student(db.Model):
+    __tablename__ = "students"
+
+    student_id = db.Column(db.Integer, primary_key=True)  # e.g. 249001, entered manually
+    name = db.Column(db.String(120), nullable=False)
+    fingerprint_id = db.Column(db.Integer, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    enrollments = db.relationship("Enrollment", backref="student", lazy=True)
+    attendance_records = db.relationship("AttendanceRecord", backref="student", lazy=True)
+
+    def __repr__(self):
+        return f"<Student {self.student_id} - {self.name}>"
+
+
+class Lecturer(db.Model):
+    __tablename__ = "lecturers"
+
+    lecturer_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(80), nullable=False, unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    full_name = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    timetable_entries = db.relationship("Timetable", backref="lecturer", lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f"<Lecturer {self.username}>"
+
+
+class Subject(db.Model):
+    __tablename__ = "subjects"
+
+    subject_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    subject_code = db.Column(db.String(20), nullable=False, unique=True)
+    subject_name = db.Column(db.String(150), nullable=False)
+
+    enrollments = db.relationship("Enrollment", backref="subject", lazy=True)
+    timetable_entries = db.relationship("Timetable", backref="subject", lazy=True)
+
+    def __repr__(self):
+        return f"<Subject {self.subject_code}>"
+
+
+class Enrollment(db.Model):
+    __tablename__ = "enrollments"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.student_id"), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey("subjects.subject_id"), nullable=False)
+
+    __table_args__ = (db.UniqueConstraint("student_id", "subject_id"),)
+
+
+class Timetable(db.Model):
+    __tablename__ = "timetable"
+
+    timetable_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey("subjects.subject_id"), nullable=False)
+    lecturer_id = db.Column(db.Integer, db.ForeignKey("lecturers.lecturer_id"), nullable=False)
+    day_of_week = db.Column(db.String(10), nullable=False)  # 'Monday' .. 'Sunday'
+    start_time = db.Column(db.String(5), nullable=False)     # '09:00'
+    end_time = db.Column(db.String(5), nullable=False)
+
+    sessions = db.relationship("LectureSession", backref="timetable_entry", lazy=True)
+
+    def __repr__(self):
+        return f"<Timetable {self.day_of_week} {self.start_time}-{self.end_time}>"
+
+
+class LectureSession(db.Model):
+    __tablename__ = "lecture_sessions"
+
+    session_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    timetable_id = db.Column(db.Integer, db.ForeignKey("timetable.timetable_id"), nullable=False)
+    session_date = db.Column(db.Date, nullable=False)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ended_at = db.Column(db.DateTime)
+    status = db.Column(db.String(10), nullable=False, default="active")  # active / closed
+
+    __table_args__ = (db.UniqueConstraint("timetable_id", "session_date"),)
+
+    attendance_records = db.relationship("AttendanceRecord", backref="session", lazy=True)
+
+    def __repr__(self):
+        return f"<LectureSession {self.session_date} ({self.status})>"
+
+
+class AttendanceRecord(db.Model):
+    __tablename__ = "attendance_records"
+
+    record_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    session_id = db.Column(db.Integer, db.ForeignKey("lecture_sessions.session_id"), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.student_id"), nullable=False)
+    status = db.Column(db.String(10), nullable=False, default="absent")  # present/absent/excused
+    marked_time = db.Column(db.DateTime)
+    excuse_reason = db.Column(db.String(10))  # medical / sport / other
+    updated_by = db.Column(db.Integer, db.ForeignKey("lecturers.lecturer_id"))
+    updated_at = db.Column(db.DateTime)
+
+    __table_args__ = (db.UniqueConstraint("session_id", "student_id"),)
+
+    def __repr__(self):
+        return f"<AttendanceRecord session={self.session_id} student={self.student_id} {self.status}>"
