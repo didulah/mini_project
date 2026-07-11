@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Report - {{ subject.subject_name }}{% endblock %}
+{% block content %}
+
+    <div class="session-header no-print">
+        <div>
+            <span class="eyebrow">Attendance report</span>
+            <h1>{{ subject.subject_name }}</h1>
+        </div>
+        <button class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+
+    <div class="print-header">
+        <h1>{{ subject.subject_name }} ({{ subject.subject_code }})</h1>
+        <p>Attendance report &middot; {{ total_sessions }} session(s) held &middot; generated {{ generated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    </div>
+
+    {% if total_sessions == 0 %}
+        <p class="empty-state">තවම මේ subject එකට session එකක්වත් start කරලා නෑ.</p>
+    {% else %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Attended</th>
+                    <th>Absent</th>
+                    <th>Attendance %</th>
+                    <th>Eligibility</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td class="mono">{{ row.student.student_id }}</td>
+                        <td>{{ row.student.name }}</td>
+                        <td>{{ row.attended }} / {{ total_sessions }}</td>
+                        <td>{{ row.absent }}</td>
+                        <td class="mono">{{ row.percent }}%</td>
+                        <td>
+                            {% if row.eligible %}
+                                <span class="badge badge-present">Eligible</span>
+                            {% else %}
+                                <span class="badge badge-absent">Not eligible</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="footnote no-print">Eligibility threshold: {{ threshold }}% attendance.</p>
+    {% endif %}
+
+{% endblock %}
