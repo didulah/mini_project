@@ -1,6 +1,7 @@
+from calendar import monthrange
 from datetime import date, datetime
 
-from flask import Blueprint, render_template, session, redirect, url_for, abort
+from flask import Blueprint, render_template, session, redirect, url_for, abort, request
 
 from extensions import db
 from models import (
@@ -159,8 +160,7 @@ def report(subject_id):
     Subject එකකට enroll වෙච්ච සියලුම students ලාගේ attendance summary එක:
     total sessions held, attended count, absent count, attendance %,
     eligibility (>= 80% => eligible). Printable විදිහටත් (browser print /
-    save-as-PDF) use කරන්න පුළුවන් - report.html එකේ .no-print class එකෙන්
-    print මොඩ් එකේදී buttons/nav hide වෙනවා.
+    save-as-PDF) use කරන්න පුළුවන්.
     """
     if not _lecturer_logged_in():
         return redirect(url_for("auth.login"))
@@ -174,7 +174,6 @@ def report(subject_id):
         ).all()
     ]
     if not timetable_ids:
-        # මේ lecturer මේ subject එක teach කරන්නේ නෑ නම් access නෑ
         abort(403)
 
     sessions_held = LectureSession.query.filter(
@@ -224,12 +223,133 @@ def report(subject_id):
     )
 
 
+@attendance_bp.route("/student/history")
+def student_history():
+    """
+    Student ID එකක් + මාසයක් (YYYY-MM) දීලා search කරන page එක.
+
+    - student_id query param එක නැත්නම් search form එක විතරක් පෙන්නනවා.
+    - student_id එකක් දුන්නාම: ඒ student ලාට enroll වෙච්ච **හැම subject එකකටම**
+      වෙන වෙනම card එකක් පෙන්නනවා - ඒ මාසේ පැවැත්වුනු lecture ගණන, absent
+      ගණන, attendance %, eligibility (>=80%), සහ දවස් අනුව (daily) attendance
+      status එක.
+    - Month දෙන්නේ නැත්නම් default එක **මේ මාසයයි**.
+    - මේ route එකට access කරන්න ඕන කරන්නේ login වෙච්ච lecturer කෙනෙක් විතරයි -
+      ඒත් subject ownership check එකක් නෑ (student ID එකෙන් search කරන එක
+      lecturer ඕන කෙනෙක්ටම exam eligibility verify කරගන්න පුළුවන් විදිහට).
+    """
+    if not _lecturer_logged_in():
+        return redirect(url_for("auth.login"))
+
+    student_id = request.args.get("student_id", type=int)
+    month_str = request.args.get("month")  # e.g. '2026-07'
+
+    student = None
+    subject_reports = []
+    error = None
+
+    if student_id is not None:
+        student = Student.query.get(student_id)
+
+        if student is None:
+            error = f"Student ID {student_id} සොයාගත නොහැක."
+        else:
+            today = date.today()
+            try:
+                year, month = (int(part) for part in month_str.split("-"))
+            except (AttributeError, ValueError):
+                year, month = today.year, today.month
+            month_str = f"{year:04d}-{month:02d}"
+
+            month_start = date(year, month, 1)
+            month_end = date(year, month, monthrange(year, month)[1])
+
+            enrolled_subjects = (
+                Subject.query.join(Enrollment, Enrollment.subject_id == Subject.subject_id)
+                .filter(Enrollment.student_id == student_id)
+                .order_by(Subject.subject_name)
+                .all()
+            )
+
+            for subject in enrolled_subjects:
+                timetable_ids = [
+                    t.timetable_id
+                    for t in Timetable.query.filter_by(subject_id=subject.subject_id).all()
+                ]
+
+                sessions_in_month = (
+                    LectureSession.query.filter(
+                        LectureSession.timetable_id.in_(timetable_ids),
+                        LectureSession.session_date >= month_start,
+                        LectureSession.session_date <= month_end,
+                    )
+                    .order_by(LectureSession.session_date)
+                    .all()
+                    if timetable_ids
+                    else []
+                )
+                session_ids = [s.session_id for s in sessions_in_month]
+                total_sessions = len(session_ids)
+
+                records_by_session = (
+                    {
+                        r.session_id: r
+                        for r in AttendanceRecord.query.filter(
+                            AttendanceRecord.student_id == student_id,
+                            AttendanceRecord.session_id.in_(session_ids),
+                        ).all()
+                    }
+                    if session_ids
+                    else {}
+                )
+
+                daily_rows = []
+                attended = 0
+                absent = 0
+                for lecture_session_obj in sessions_in_month:
+                    record = records_by_session.get(lecture_session_obj.session_id)
+                    status = record.status if record else "absent"
+                    if status in ("present", "excused"):
+                        attended += 1
+                    else:
+                        absent += 1
+                    daily_rows.append(
+                        {
+                            "date": lecture_session_obj.session_date,
+                            "status": status,
+                            "excuse_reason": record.excuse_reason if record else None,
+                        }
+                    )
+
+                percent = (
+                    round(100.0 * attended / total_sessions, 2) if total_sessions else 0.0
+                )
+
+                subject_reports.append(
+                    {
+                        "subject": subject,
+                        "total_sessions": total_sessions,
+                        "attended": attended,
+                        "absent": absent,
+                        "percent": percent,
+                        "eligible": percent >= ELIGIBILITY_THRESHOLD,
+                        "daily_rows": daily_rows,
+                    }
+                )
+
+    return render_template(
+        "student_history.html",
+        student=student,
+        student_id_query=student_id,
+        month=month_str,
+        subject_reports=subject_reports,
+        error=error,
+        threshold=ELIGIBILITY_THRESHOLD,
+    )
+
+
 # ------------------------------------------------------------------
-# TODO (next steps - not yet implemented):
-#
-# @attendance_bp.route("/student/<int:student_id>/history")
-#   -> monthly historical data + attendance % + eligibility
-#      (uses the query pattern documented at the bottom of schema.sql).
+# TODO (next step - not yet implemented):
 #
 # @attendance_bp.route("/attendance/update/<int:record_id>", methods=["GET", "POST"])
 #   -> lecturer corrects a false-absent mark, or applies an
