@@ -2,7 +2,7 @@
 {% block title %}Session - {{ subject.subject_name }}{% endblock %}
 {% block content %}
 
-    <div class="session-header">
+    <div class="session-header no-print">
         <div>
             <span class="eyebrow">{{ lecture_session.session_date }} &middot; Session #{{ lecture_session.session_id }}</span>
             <h1>{{ subject.subject_name }}</h1>
@@ -10,7 +10,14 @@
         <span class="status-pill status-{{ lecture_session.status }}">{{ lecture_session.status }}</span>
     </div>
 
-    <div class="session-summary">
+    <div class="session-header print-only">
+        <div>
+            <span class="eyebrow">{{ lecture_session.session_date }} &middot; Session #{{ lecture_session.session_id }}</span>
+            <h1>{{ subject.subject_name }} — Attendance Sheet</h1>
+        </div>
+    </div>
+
+    <div class="session-summary no-print">
         <div class="summary-stat">
             <span class="summary-number">{{ present_count }}</span>
             <span class="summary-label">Present</span>
@@ -24,6 +31,7 @@
             <span class="summary-label">Enrolled</span>
         </div>
         <a href="{{ url_for('attendance.session_view', session_id=lecture_session.session_id) }}" class="btn btn-ghost">Refresh</a>
+        <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
     </div>
 
     <table class="data-table">
@@ -33,6 +41,7 @@
                 <th>Name</th>
                 <th>Status</th>
                 <th>Marked at</th>
+                <th class="no-print">Action</th>
             </tr>
         </thead>
         <tbody>
@@ -43,9 +52,28 @@
                     <td>{{ student.name }}</td>
                     <td><span class="badge badge-{{ record.status }}">{{ record.status }}</span></td>
                     <td class="mono">{{ record.marked_time.strftime('%H:%M:%S') if record.marked_time else '—' }}</td>
+                    <td class="no-print">
+                        <a href="{{ url_for('attendance.update_attendance', record_id=record.record_id) }}" class="btn btn-ghost btn-small">Update</a>
+                    </td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
+
+    <style>
+        /* Print stylesheet - report.html එකේ තියෙන pattern එකම, session.html
+           එකටත් inline කරලා දාපු එක (style.css එකේ දැනටමත් print rules
+           තියෙනවා නම් duplicate වුනත් problem එකක් නෑ, browser cascade එක
+           handle කරයි). */
+        .print-only { display: none; }
+
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block; }
+            body { background: #fff; }
+            .data-table { width: 100%; border-collapse: collapse; }
+            .data-table th, .data-table td { border: 1px solid #333; padding: 6px 10px; }
+        }
+    </style>
 
 {% endblock %}
