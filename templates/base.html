@@ -2,15 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Attendance System{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <header class="topbar">
-        <span class="brand">Fingerprint Attendance System</span>
+        <span class="brand">
+            <svg class="brand-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2C7 2 3 6 3 11v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M7 11c0-2.8 2.2-5 5-5s5 2.2 5 5v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M9.5 11a2.5 2.5 0 0 1 5 0v3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M12 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            Fingerprint Attendance System
+        </span>
         {% if session.get('lecturer_id') %}
             <nav>
-                <span>{{ session.get('lecturer_name') }}</span>
+                <span class="lecturer-name">{{ session.get('lecturer_name') }}</span>
                 <a href="{{ url_for('auth.logout') }}">Logout</a>
             </nav>
         {% endif %}
