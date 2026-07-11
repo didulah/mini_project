@@ -22,6 +22,8 @@
         </span>
         {% if session.get('lecturer_id') %}
             <nav>
+                <a href="{{ url_for('attendance.dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('attendance.report_subjects') }}">Reports</a>
                 <span class="lecturer-name">{{ session.get('lecturer_name') }}</span>
                 <a href="{{ url_for('auth.logout') }}">Logout</a>
             </nav>
