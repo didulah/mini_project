@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Update Attendance - {{ student.name }}{% endblock %}
+{% block content %}
+
+    <div class="session-header">
+        <div>
+            <span class="eyebrow">{{ lecture_session.session_date }} &middot; {{ subject.subject_name }}</span>
+            <h1>Update Attendance</h1>
+        </div>
+        <a href="{{ url_for('attendance.session_view', session_id=lecture_session.session_id) }}" class="btn btn-ghost">&larr; Back to Session</a>
+    </div>
+
+    <div class="card update-card">
+        <div class="update-student-info">
+            <span class="mono">{{ student.student_id }}</span>
+            <strong>{{ student.name }}</strong>
+            <span class="badge badge-{{ record.status }}">{{ record.status }}</span>
+        </div>
+
+        {% if error %}
+            <p class="form-error">{{ error }}</p>
+        {% endif %}
+
+        <form method="post" class="update-form" id="update-form">
+            <fieldset>
+                <legend>New Status</legend>
+
+                <label class="radio-option">
+                    <input type="radio" name="status" value="present" {% if record.status == 'present' %}checked{% endif %} onchange="toggleExcuseField()">
+                    <span>Present <small>(false-absent correction — student was actually in class)</small></span>
+                </label>
+
+                <label class="radio-option">
+                    <input type="radio" name="status" value="excused" {% if record.status == 'excused' %}checked{% endif %} onchange="toggleExcuseField()">
+                    <span>Excused <small>(approved medical / sport / other reason — counts as attended)</small></span>
+                </label>
+
+                <label class="radio-option">
+                    <input type="radio" name="status" value="absent" {% if record.status == 'absent' %}checked{% endif %} onchange="toggleExcuseField()">
+                    <span>Absent <small>(revert to absent)</small></span>
+                </label>
+            </fieldset>
+
+            <div id="excuse-reason-field" class="form-field" style="display: none;">
+                <label for="excuse_reason">Excuse Reason</label>
+                <select name="excuse_reason" id="excuse_reason">
+                    <option value="">-- Select --</option>
+                    <option value="medical" {% if record.excuse_reason == 'medical' %}selected{% endif %}>Medical</option>
+                    <option value="sport" {% if record.excuse_reason == 'sport' %}selected{% endif %}>Sport</option>
+                    <option value="other" {% if record.excuse_reason == 'other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <div class="update-actions">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a href="{{ url_for('attendance.session_view', session_id=lecture_session.session_id) }}" class="btn btn-ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function toggleExcuseField() {
+            var selected = document.querySelector('input[name="status"]:checked');
+            var field = document.getElementById('excuse-reason-field');
+            field.style.display = (selected && selected.value === 'excused') ? 'block' : 'none';
+        }
+        // Page load එකේදීම (record.status == 'excused' නම්) field එක පෙන්නන්න
+        document.addEventListener('DOMContentLoaded', toggleExcuseField);
+    </script>
+
+{% endblock %}
