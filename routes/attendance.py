@@ -16,6 +16,8 @@ from models import (
 attendance_bp = Blueprint("attendance", __name__)
 
 ELIGIBILITY_THRESHOLD = 80.0
+VALID_STATUSES = ("present", "absent", "excused")
+VALID_EXCUSE_REASONS = ("medical", "sport", "other")
 
 
 def _lecturer_logged_in():
@@ -348,10 +350,71 @@ def student_history():
     )
 
 
-# ------------------------------------------------------------------
-# TODO (next step - not yet implemented):
-#
-# @attendance_bp.route("/attendance/update/<int:record_id>", methods=["GET", "POST"])
-#   -> lecturer corrects a false-absent mark, or applies an
-#      excuse_reason (medical/sport/other) to flip absent -> present.
-# ------------------------------------------------------------------
+@attendance_bp.route("/attendance/update/<int:record_id>", methods=["GET", "POST"])
+def update_attendance(record_id):
+    """
+    Attendance record එකක් lecturer ට manually update කරන්න පුළුවන් screen එක.
+    Use case දෙකක් cover කරනවා:
+
+      1. False-absent correction - fingerprint scan එක fail වෙලා 'absent'
+         ලෙස පෙන්නුනු student කෙනෙක් ඇත්තටම class එකට ආවා නම්, status එක
+         'present' ලෙස manually flip කරනවා.
+      2. Excuse handling - class එකට නොපැමිනි student කෙනෙක් පස්සේ medical/
+         sport/other reason එකක් ඉදිරිපත් කළොත්, status එක 'excused' ලෙස
+         දාලා reason එකත් save කරනවා. (report/eligibility calculation එකේදී
+         excused = attended ලෙසයි ගණන් ගන්නේ - report()/student_history()
+         දෙකෙහිම status in ('present','excused') check එක බලන්න.)
+
+    Ownership check එක start_session()/session_view()/report() වල තියෙන
+    pattern එකම - record එකේ session එකේ timetable එකේ lecturer_id != current
+    lecturer නම් 403.
+    """
+    if not _lecturer_logged_in():
+        return redirect(url_for("auth.login"))
+
+    record = AttendanceRecord.query.get_or_404(record_id)
+    lecture_session = record.session
+    timetable_entry = lecture_session.timetable_entry
+
+    if timetable_entry.lecturer_id != session["lecturer_id"]:
+        abort(403)
+
+    student = record.student
+    subject = timetable_entry.subject
+    error = None
+
+    if request.method == "POST":
+        new_status = request.form.get("status")
+        excuse_reason = request.form.get("excuse_reason") or None
+
+        if new_status not in VALID_STATUSES:
+            abort(400)
+
+        if new_status == "excused" and excuse_reason not in VALID_EXCUSE_REASONS:
+            error = "Excused ලෙස සලකුණු කරන්න excuse reason එකක් (medical/sport/other) තෝරන්න ඕන."
+        else:
+            record.status = new_status
+            record.excuse_reason = excuse_reason if new_status == "excused" else None
+
+            if new_status == "present" and record.marked_time is None:
+                # Manually 'present' කරද්දී marked_time කලින් තිබ්බේ නැත්නම්
+                # දැන් වෙලාව audit trail එකක් විදිහට save කරනවා.
+                record.marked_time = datetime.utcnow()
+            elif new_status == "absent":
+                record.marked_time = None
+
+            record.updated_by = session["lecturer_id"]
+            record.updated_at = datetime.utcnow()
+
+            db.session.commit()
+
+            return redirect(url_for("attendance.session_view", session_id=lecture_session.session_id))
+
+    return render_template(
+        "attendance_update.html",
+        record=record,
+        student=student,
+        subject=subject,
+        lecture_session=lecture_session,
+        error=error,
+    )
