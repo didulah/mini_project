@@ -1,18 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-    <h1>Today's lectures ({{ today }})</h1>
+    <span class="eyebrow">{{ today }}</span>
+    <h1>Today's lectures</h1>
 
     {% if lectures %}
-        <ul class="lecture-list">
+        <div class="lecture-list">
             {% for lec in lectures %}
-                <li>
-                    {{ lec.subject.subject_name }} ({{ lec.start_time }} - {{ lec.end_time }})
-                    <!-- TODO: link to /session/start/<timetable_id> once implemented -->
-                </li>
+                <div class="lecture-card">
+                    <div class="lecture-info">
+                        <span class="lecture-time mono">{{ lec.start_time }} – {{ lec.end_time }}</span>
+                        <span class="lecture-subject">{{ lec.subject.subject_name }}</span>
+                    </div>
+                    <form action="{{ url_for('attendance.start_session', timetable_id=lec.timetable_id) }}" method="post">
+                        <button type="submit" class="btn btn-primary">Start Session</button>
+                    </form>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     {% else %}
-        <p>No lectures scheduled for today.</p>
+        <p class="empty-state">No lectures scheduled for today.</p>
     {% endif %}
 {% endblock %}
