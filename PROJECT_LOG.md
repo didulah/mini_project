@@ -1,86 +1,77 @@
-# PROJECT_LOG.md
+# PROJECT_LOG.md — Fingerprint Attendance System
 
-මෙම file එක, future chat sessions වලදී AI agent කෙනෙකුට (හෝ ඔයාටම පසුව) project එකේ current context එක ඉක්මනින් තේරුම් ගැනීමට උදව් වන running log එකකි. සෑම major decision/step එකකින් පසුම මෙය update කරන්න.
+## Overview
+Fingerprint (R307S + ESP32) based Student Attendance Management System.
+Flask web app (SQLite database) lets lecturers log in, start a lecture
+session, watch fingerprint scans mark attendance live, view reports, and
+look up individual student history. Hardware firmware is postponed;
+software is being built first against a test dataset.
 
----
+GitHub repo: https://github.com/didulah/mini_project
 
-## 🎯 Original Goal
+## Architecture
+- **Backend:** Flask app factory pattern (`app.py` → `create_app()`),
+  3 blueprints: `auth`, `attendance`, `api`
+- **Database:** SQLite via SQLAlchemy (`extensions.py` → `db`, models in
+  `models.py`, raw DDL mirror in `schema.sql`)
+- **Session-based attendance mapping:** lecturer logs in → sees today's
+  lectures (`timetable` filtered by `day_of_week` + `lecturer_id`) →
+  clicks **Start Session** → a `lecture_sessions` row is created/reused
+  for today → only scans posted while that session is active map to it
+- **ESP32 integration:** `/api/scan` POST endpoint (JSON: fingerprint_id,
+  session_id) — hardware-agnostic, not yet connected to physical device
+- **Eligibility rule:** attendance ≥ 80% → Eligible (calculated on the
+  fly, never stored)
 
-Fingerprint sensor + ESP32 based Student Attendance System එකක්, Flask web app + SQLite database සමඟ සම්පූර්ණ කිරීම. Lecturers ට login වී, lecture select කර, attendance track/report/update කළ හැකි web application එකක් සමඟ.
+## Database Schema (schema.sql / models.py — finalized)
+7 tables: `students`, `lecturers`, `subjects`, `enrollments`, `timetable`,
+`lecture_sessions`, `attendance_records`. See schema.sql for full DDL,
+including the eligibility-% query pattern used across the report and
+history routes.
 
-## 🧩 Hardware (Confirmed - already built)
+## Routes implemented so far
 
-- Fingerprint sensor - R307S
-- ESP32 (38 pin)
-- RTC Module - DS3231 (HW-084)
-- OLED Display 0.91" (4 pin)
-- Buzzer + S8050 transistor
-- Charging module + 3.7V battery
-
-## 🏗️ Architecture Decisions
-
-1. **Session-based attendance mapping** — Fingerprint sensor එකට "මේක කුමන lecture එකටද" කියලා තනියෙන් දැනගන්න බැරි නිසා, දේශකයා web app එකෙන් login → today's lecture select → "start session" කළ පසුව විතරක් ESP32 එකෙන් එන scans, active session එකට map වේ. (තහවුරු කළ decision - implementation තවම නැත)
-2. **Communication:** ESP32 → Flask API (HTTP POST, WiFi) - protocol/endpoint design තවම නැත
-3. **Database:** SQLite (single-file, project scale එකට ප්‍රමාණවත්)
-4. **Eligibility rule:** Attendance ≥ 80% → Eligible, අඩුනම් Not Eligible
-5. **Database schema (finalized):** `students`, `lecturers`, `subjects`, `enrollments`, `timetable`, `lecture_sessions`, `attendance_records` - 7 tables. `timetable` = weekly recurring schedule (lecturer login → today's lectures filter කරන්නේ මෙතනින්), `lecture_sessions` = timetable එකකින් දිනකට generate වෙන actual instance. Attendance % කිසිම විටෙක table එකක store කරන්නේ නෑ - query එකකින් dynamic ලෙස calculate කරනවා. Schema file: `schema.sql` (SQLite, tested & valid).
-
-## 📂 Files/Code Produced So Far
-
-| File | Status | Notes |
+| Route | Method | Purpose |
 |---|---|---|
-| README.md | ✅ Created | Project overview, hardware/software list, planned structure |
-| PROJECT_LOG.md | ✅ Created | මෙම file එක |
-| schema.sql | ✅ Created & tested | 7 tables, indexes, sample eligibility query included |
-| Flask skeleton (`app.py`, `config.py`, `extensions.py`, `models.py`, `routes/`, `templates/`, `static/`) | ✅ Created, pushed to GitHub, **verified running locally** | App factory pattern + 3 blueprints (`auth`, `attendance`, `api`). User confirmed `python app.py` runs successfully on `http://127.0.0.1:5000` with `pip install -r requirements.txt`. |
-| ESP32 firmware | ⚠️ Not yet added to repo | User has working hardware code locally - needs to be copied into `firmware/` folder |
+| `/dashboard` | GET | Today's lectures for the logged-in lecturer |
+| `/session/start/<timetable_id>` | POST | Creates (or reuses) today's `lecture_sessions` row, redirects to session view |
+| `/session/<session_id>` | GET | Live attendance view — enrolled students, default `absent`, updates as `/api/scan` marks `present` |
+| `/report` | GET | Lists the lecturer's subjects to pick from |
+| `/report/<subject_id>` | GET | Full attendance table for a subject: attended/absent/%/eligibility per student, printable (browser Print → Save as PDF) |
+| `/student/history` | GET | Search by `student_id` (+ optional `month`), shows one card per enrolled subject: lectures held, absences, %, eligibility, day-by-day status |
 
-## 🚧 Current Blocking Issue
+Still TODO (not implemented yet):
+- `/attendance/update/<record_id>` — false-absent correction + medical/sport/other excuse flow (flips `absent` → `present`/`excused`)
+- Deployment (Render/PythonAnywhere/Railway — not yet decided)
+- ESP32 firmware `.ino` code (postponed, `firmware/` folder is a placeholder)
 
-කිසිවක් නැත. Flask skeleton එක GitHub repo එකට push වෙලා, locally run කර verify කර ඇත (`python app.py` → `http://127.0.0.1:5000` on Windows/VSCode).
+## Frontend / Design
+Design token system in `static/css/style.css`:
+- **Colors:** steel-blue primary (`#2F4B7C`), teal accent for "present"/success (`#17A398`), warm amber for pending/excused (`#C9822E`), muted red for absent/error (`#B3261E`)
+- **Type:** Space Grotesk (headings), Inter (body), JetBrains Mono (IDs/timestamps) — loaded via Google Fonts in `base.html`
+- Reusable components: `.btn`, `.badge` (present/absent/excused), `.data-table`, `.lecture-card`, `.session-summary`, `.search-form`, `.subject-report-card`
+- Print stylesheet (`@media print`) hides nav/buttons for a clean printable report
+- Responsive breakpoint at 560px; `prefers-reduced-motion` respected
+- Login form + heading now center-aligned (`.login-form { margin: 60px auto 0; }`, `.content:has(.login-form) h1 { text-align: center; }`)
 
-## ✅ Immediate Next Steps
+## Sample/Test Data
+`seed_data.py` (idempotent) creates: 1 lecturer (`lecturer1` / `password123`),
+1 subject (`ICT3202` — Embedded Systems), 5 students (249001–249005), their
+enrollments, and a timetable entry for **today's** day-of-week — so the
+login → dashboard → start session flow can be tested end-to-end
+immediately after running it.
 
-1. Existing ESP32 `.ino` firmware code, `firmware/` folder එකට add කර push කිරීම
-2. Seed/sample data script එකක් (test lecturer, subject, timetable rows) - login flow test කරන්න
-3. Lecturer login flow end-to-end test කිරීම (real DB record එකක් සමඟ)
-4. `/session/start/<timetable_id>` route - "start session" logic implement කිරීම
-5. ESP32 → Flask `/api/scan` endpoint එක, real hardware සමඟ integrate කිරීම
-6. Attendance report + PDF/print export feature
-7. Student historical lookup + eligibility calculation logic
-8. Update Attendance (false-absent correction + late-excuse) flow
-9. Deployment ක්‍රමයක් තෝරාගැනීම (Render/PythonAnywhere/VPS etc.)
+## Immediate Next Steps
+1. **Update Attendance route** (`/attendance/update/<record_id>`) —
+   lecturer corrects a false-absent mark, or applies an excuse_reason
+   (medical/sport/other) to flip a record to present/excused
+2. Deployment platform decision + setup
+3. ESP32 `.ino` firmware — connect the physical sensor to `/api/scan`
 
-## 📝 Open Questions (User input needed)
-
-- Deployment platform කුමක්ද? (Free-tier options: Render, PythonAnywhere, Railway)
-- Lecture timetable data එක manually enter කරනවාද, නැත්නම් admin panel එකකින් manage කරනවාද?
-- Multiple lecturers/subjects සඳහා role-based access අවශ්‍යද?
-
-## 🖥️ Common Terminal Commands (VSCode)
-
-**App එක run කිරීම (project folder එක ඇතුළේ):**
-```
-python app.py
-```
-Stop කරන්න: `CTRL+C`
-
-**අලුත් file/changes GitHub එකට push කිරීම:**
-```
-git add .
-git commit -m "meaningful message about what changed"
-git push
-```
-
-**Package අලුතක් install කළාට පස්සේ (e.g. requirements.txt එකට එකතු කළොත්):**
-```
-pip install -r requirements.txt
-```
-
-**දැනට install කරලා තියෙන packages list එක `requirements.txt` එකට freeze කිරීම (අලුත් package එකක් install කළහොත්):**
-```
-pip freeze > requirements.txt
-```
-
----
-*Last updated: Flask skeleton pushed to GitHub & verified running (July 2026)*
+## Open Questions
+- Deployment platform?
+- Timetable data: manual entry, or an admin panel?
+- Multiple lecturers/subjects — role-based access needed beyond
+  "lecturer only sees their own timetable"?
+- Should `/student/history` be restricted to lecturers who teach that
+  student, or stay open to any logged-in lecturer (current behaviour)?
