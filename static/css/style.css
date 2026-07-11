@@ -118,7 +118,14 @@ h1 {
 /* ---------------- Login form ----------------
    Centered both horizontally (margin auto) and with some top breathing
    room. Works regardless of whether login.html wraps the form in an
-   extra container, since .login-form itself now centers within .content. */
+   extra container, since .login-form itself now centers within .content.
+   The :has() rule also centers the "Lecturer Login" heading whenever a
+   .login-form is present on the page, without needing to touch
+   login.html directly. */
+.content:has(.login-form) h1 {
+    text-align: center;
+}
+
 .login-form {
     display: flex;
     flex-direction: column;
