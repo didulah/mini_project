@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Student History{% endblock %}
+{% block content %}
+    <span class="eyebrow">Lookup</span>
+    <h1>Student attendance history</h1>
+
+    <form class="search-form" method="get" action="{{ url_for('attendance.student_history') }}">
+        <div class="search-field">
+            <label for="student_id">Student ID</label>
+            <input type="number" id="student_id" name="student_id" placeholder="e.g. 249001"
+                   value="{{ student_id_query if student_id_query is not none else '' }}" required>
+        </div>
+        <div class="search-field">
+            <label for="month">Month</label>
+            <input type="month" id="month" name="month" value="{{ month }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    {% if error %}
+        <p class="empty-state">{{ error }}</p>
+    {% elif student %}
+        <div class="student-header">
+            <h1>{{ student.name }} <span class="mono">({{ student.student_id }})</span></h1>
+            <span class="eyebrow">{{ month }}</span>
+        </div>
+
+        {% if subject_reports %}
+            {% for report in subject_reports %}
+                <div class="subject-report-card">
+                    <div class="subject-report-header">
+                        <h2>{{ report.subject.subject_name }}</h2>
+                        {% if report.eligible %}
+                            <span class="badge badge-present">Eligible</span>
+                        {% else %}
+                            <span class="badge badge-absent">Not eligible</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="subject-report-stats">
+                        <div class="summary-stat">
+                            <span class="summary-number">{{ report.total_sessions }}</span>
+                            <span class="summary-label">Lectures held</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="summary-number">{{ report.absent }}</span>
+                            <span class="summary-label">Absent</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="summary-number">{{ report.percent }}%</span>
+                            <span class="summary-label">Attendance</span>
+                        </div>
+                    </div>
+
+                    {% if report.daily_rows %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Excuse reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for day in report.daily_rows %}
+                                    <tr>
+                                        <td class="mono">{{ day.date }}</td>
+                                        <td><span class="badge badge-{{ day.status }}">{{ day.status }}</span></td>
+                                        <td>{{ day.excuse_reason or '—' }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="empty-state">මේ මාසේ {{ report.subject.subject_name }} සඳහා lecture පවත්වලා නෑ.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="empty-state">මේ student ලා කිසිම subject එකකට enroll වෙලා නෑ.</p>
+        {% endif %}
+    {% endif %}
+{% endblock %}
