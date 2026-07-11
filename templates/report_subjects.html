@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+    <span class="eyebrow">Attendance</span>
+    <h1>Select a subject</h1>
+
+    {% if subjects %}
+        <div class="lecture-list">
+            {% for subj in subjects %}
+                <a class="lecture-card lecture-card-link" href="{{ url_for('attendance.report', subject_id=subj.subject_id) }}">
+                    <div class="lecture-info">
+                        <span class="lecture-time mono">{{ subj.subject_code }}</span>
+                        <span class="lecture-subject">{{ subj.subject_name }}</span>
+                    </div>
+                    <span class="btn btn-ghost">View report</span>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">ඔබට allocate වෙච්ච subjects නෑ.</p>
+    {% endif %}
+{% endblock %}
