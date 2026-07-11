@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Session - {{ subject.subject_name }}{% endblock %}
+{% block content %}
+
+    <div class="session-header">
+        <div>
+            <span class="eyebrow">{{ lecture_session.session_date }} &middot; Session #{{ lecture_session.session_id }}</span>
+            <h1>{{ subject.subject_name }}</h1>
+        </div>
+        <span class="status-pill status-{{ lecture_session.status }}">{{ lecture_session.status }}</span>
+    </div>
+
+    <div class="session-summary">
+        <div class="summary-stat">
+            <span class="summary-number">{{ present_count }}</span>
+            <span class="summary-label">Present</span>
+        </div>
+        <div class="summary-stat">
+            <span class="summary-number">{{ total_count - present_count }}</span>
+            <span class="summary-label">Absent</span>
+        </div>
+        <div class="summary-stat">
+            <span class="summary-number">{{ total_count }}</span>
+            <span class="summary-label">Enrolled</span>
+        </div>
+        <a href="{{ url_for('attendance.session_view', session_id=lecture_session.session_id) }}" class="btn btn-ghost">Refresh</a>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Marked at</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+                {% set record = records[student.student_id] %}
+                <tr>
+                    <td class="mono">{{ student.student_id }}</td>
+                    <td>{{ student.name }}</td>
+                    <td><span class="badge badge-{{ record.status }}">{{ record.status }}</span></td>
+                    <td class="mono">{{ record.marked_time.strftime('%H:%M:%S') if record.marked_time else '—' }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}
