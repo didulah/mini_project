@@ -1,11 +1,20 @@
-from datetime import date
+from datetime import date, datetime
 
 from flask import Blueprint, render_template, session, redirect, url_for, abort
 
 from extensions import db
-from models import Timetable, LectureSession, Student, Enrollment, AttendanceRecord
+from models import (
+    Timetable,
+    LectureSession,
+    Student,
+    Subject,
+    Enrollment,
+    AttendanceRecord,
+)
 
 attendance_bp = Blueprint("attendance", __name__)
+
+ELIGIBILITY_THRESHOLD = 80.0
 
 
 def _lecturer_logged_in():
@@ -67,8 +76,7 @@ def session_view(session_id):
     Session එක start කළාට පස්සේ redirect වෙන 'live attendance' screen එක.
     Enrolled students ලා ඔක්කොම (default status='absent' ලෙස) පෙන්නනවා -
     fingerprint scan එකක් ආවම (/api/scan හරහා) status එක 'present' ලෙස update
-    වෙනවා, page refresh කළාම ඒ වෙනස පේනවා (real-time push - websockets - තවම
-    scope එකේ නෑ, plain refresh එකින් වැඩේ කරගන්න පුළුවන්).
+    වෙනවා, page refresh කළාම ඒ වෙනස පේනවා.
     """
     if not _lecturer_logged_in():
         return redirect(url_for("auth.login"))
@@ -88,8 +96,6 @@ def session_view(session_id):
         .all()
     )
 
-    # session එකට attendance_records row එකක් නැති students ලාට default
-    # 'absent' row එකක් හදනවා (session ආරම්භයේදීම හැමෝම absent, scan වුනාම present)
     existing_ids = {
         r.student_id
         for r in AttendanceRecord.query.filter_by(session_id=session_id).all()
@@ -126,12 +132,100 @@ def session_view(session_id):
     )
 
 
+@attendance_bp.route("/report")
+def report_subjects():
+    """
+    Report එකට යනකොට මුලින්ම subject එකක් තෝරගන්න ඕන (lecturer කෙනෙක්ට
+    subject කීපයක් teach කරන්න පුළුවන් නිසා). ලොග් වෙලා ඉන්න lecturer ගේ
+    timetable එකේ තියෙන subjects විතරක් පෙන්නනවා.
+    """
+    if not _lecturer_logged_in():
+        return redirect(url_for("auth.login"))
+
+    subjects = (
+        Subject.query.join(Timetable, Timetable.subject_id == Subject.subject_id)
+        .filter(Timetable.lecturer_id == session["lecturer_id"])
+        .distinct()
+        .order_by(Subject.subject_name)
+        .all()
+    )
+
+    return render_template("report_subjects.html", subjects=subjects)
+
+
+@attendance_bp.route("/report/<int:subject_id>")
+def report(subject_id):
+    """
+    Subject එකකට enroll වෙච්ච සියලුම students ලාගේ attendance summary එක:
+    total sessions held, attended count, absent count, attendance %,
+    eligibility (>= 80% => eligible). Printable විදිහටත් (browser print /
+    save-as-PDF) use කරන්න පුළුවන් - report.html එකේ .no-print class එකෙන්
+    print මොඩ් එකේදී buttons/nav hide වෙනවා.
+    """
+    if not _lecturer_logged_in():
+        return redirect(url_for("auth.login"))
+
+    subject = Subject.query.get_or_404(subject_id)
+
+    timetable_ids = [
+        t.timetable_id
+        for t in Timetable.query.filter_by(
+            subject_id=subject_id, lecturer_id=session["lecturer_id"]
+        ).all()
+    ]
+    if not timetable_ids:
+        # මේ lecturer මේ subject එක teach කරන්නේ නෑ නම් access නෑ
+        abort(403)
+
+    sessions_held = LectureSession.query.filter(
+        LectureSession.timetable_id.in_(timetable_ids)
+    ).all()
+    session_ids = [s.session_id for s in sessions_held]
+    total_sessions = len(session_ids)
+
+    enrolled_students = (
+        Student.query.join(Enrollment, Enrollment.student_id == Student.student_id)
+        .filter(Enrollment.subject_id == subject_id)
+        .order_by(Student.student_id)
+        .all()
+    )
+
+    rows = []
+    for student in enrolled_students:
+        attended = absent = 0
+        percent = 0.0
+
+        if total_sessions > 0:
+            records = AttendanceRecord.query.filter(
+                AttendanceRecord.student_id == student.student_id,
+                AttendanceRecord.session_id.in_(session_ids),
+            ).all()
+            attended = sum(1 for r in records if r.status in ("present", "excused"))
+            absent = sum(1 for r in records if r.status == "absent")
+            percent = round(100.0 * attended / total_sessions, 2)
+
+        rows.append(
+            {
+                "student": student,
+                "attended": attended,
+                "absent": absent,
+                "percent": percent,
+                "eligible": percent >= ELIGIBILITY_THRESHOLD,
+            }
+        )
+
+    return render_template(
+        "report.html",
+        subject=subject,
+        total_sessions=total_sessions,
+        rows=rows,
+        threshold=ELIGIBILITY_THRESHOLD,
+        generated_at=datetime.now(),
+    )
+
+
 # ------------------------------------------------------------------
 # TODO (next steps - not yet implemented):
-#
-# @attendance_bp.route("/report")
-#   -> full attendance report across all students, with a
-#      printable view (see docx/pdf skill for generating the export).
 #
 # @attendance_bp.route("/student/<int:student_id>/history")
 #   -> monthly historical data + attendance % + eligibility
