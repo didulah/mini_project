@@ -1,23 +1,268 @@
-* { box-sizing: border-box; font-family: sans-serif; }
-body { margin: 0; background: #f4f4f2; color: #222; }
+/* ==========================================================
+   Fingerprint Attendance System - Design tokens
+   ========================================================== */
+:root {
+    /* Color */
+    --color-bg: #F5F6F4;
+    --color-surface: #FFFFFF;
+    --color-ink: #1B1F2A;
+    --color-ink-soft: #5B6474;
+    --color-border: #E3E5E0;
 
+    --color-primary: #2F4B7C;
+    --color-primary-dark: #22375C;
+    --color-accent: #17A398;      /* present / success */
+    --color-warn: #C9822E;        /* pending / excused */
+    --color-danger: #B3261E;      /* absent / error */
+
+    /* Type */
+    --font-display: "Space Grotesk", sans-serif;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+
+    /* Layout */
+    --radius: 10px;
+    --shadow-sm: 0 1px 2px rgba(27, 31, 42, 0.06), 0 1px 1px rgba(27, 31, 42, 0.04);
+    --shadow-md: 0 4px 12px rgba(27, 31, 42, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+}
+
+h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.6rem;
+    margin: 4px 0 20px;
+    letter-spacing: -0.01em;
+}
+
+.mono { font-family: var(--font-mono); font-size: 0.92em; }
+
+.eyebrow {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+}
+
+/* ---------------- Topbar ---------------- */
 .topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 24px;
-    background: #1d1d1b;
+    padding: 16px 28px;
+    background: var(--color-primary-dark);
     color: #fff;
 }
-.topbar nav a { color: #fff; margin-left: 12px; }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+.brand-mark { width: 22px; height: 22px; color: var(--color-accent); flex-shrink: 0; }
 
-.content { padding: 24px; max-width: 720px; margin: 0 auto; }
+.topbar nav { display: flex; align-items: center; gap: 16px; font-size: 0.92rem; }
+.lecturer-name { color: rgba(255, 255, 255, 0.75); }
+.topbar nav a {
+    color: #fff;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: background 0.15s ease;
+}
+.topbar nav a:hover { background: rgba(255, 255, 255, 0.2); }
+.topbar nav a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
-.login-form { display: flex; flex-direction: column; max-width: 320px; gap: 8px; }
-.login-form input { padding: 8px; }
-.login-form button { margin-top: 12px; padding: 10px; cursor: pointer; }
+/* ---------------- Content ---------------- */
+.content { padding: 32px 24px; max-width: 780px; margin: 0 auto; }
 
-.flashes { color: #a32d2d; }
+.empty-state {
+    color: var(--color-ink-soft);
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: center;
+}
 
-.lecture-list { list-style: none; padding: 0; }
-.lecture-list li { padding: 12px; background: #fff; margin-bottom: 8px; border-radius: 8px; }
+/* ---------------- Flash messages ---------------- */
+.flashes {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px;
+}
+.flashes li {
+    background: #FBEAE8;
+    color: var(--color-danger);
+    border: 1px solid #F2C7C2;
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+/* ---------------- Login form ---------------- */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    max-width: 320px;
+    gap: 10px;
+    background: var(--color-surface);
+    padding: 24px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-border);
+}
+.login-form input {
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+}
+.login-form input:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(47, 75, 124, 0.15);
+}
+
+/* ---------------- Buttons ---------------- */
+.btn {
+    display: inline-block;
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: none;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.1s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-ghost {
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-border);
+}
+.btn-ghost:hover { background: var(--color-surface); border-color: var(--color-primary); }
+
+/* ---------------- Lecture cards (dashboard) ---------------- */
+.lecture-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.lecture-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+}
+.lecture-info { display: flex; flex-direction: column; gap: 4px; }
+.lecture-time { color: var(--color-ink-soft); font-size: 0.85rem; }
+.lecture-subject { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; }
+
+/* ---------------- Session view ---------------- */
+.session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+.status-pill {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+.status-active { background: #E4F5F2; color: var(--color-accent); }
+.status-closed { background: #EDEDEA; color: var(--color-ink-soft); }
+
+.session-summary {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+.summary-stat { display: flex; flex-direction: column; }
+.summary-number { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+.summary-label { font-size: 0.78rem; color: var(--color-ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.session-summary .btn { margin-left: auto; }
+
+/* ---------------- Data table ---------------- */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+.data-table th, .data-table td {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.92rem;
+}
+.data-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-soft);
+    background: #FAFAF8;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: #FAFBF9; }
+
+/* ---------------- Status badges ---------------- */
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+.badge-present { background: #E4F5F2; color: var(--color-accent); }
+.badge-absent { background: #FBEAE8; color: var(--color-danger); }
+.badge-excused { background: #FBF1E4; color: var(--color-warn); }
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 560px) {
+    .content { padding: 20px 16px; }
+    .lecture-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .session-header { flex-direction: column; gap: 10px; }
+    .session-summary { flex-wrap: wrap; gap: 16px; }
+    .session-summary .btn { margin-left: 0; }
+    .data-table { font-size: 0.85rem; }
+    .data-table th, .data-table td { padding: 10px; }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
