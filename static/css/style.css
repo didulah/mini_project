@@ -251,6 +251,32 @@ h1 {
 .badge-absent { background: #FBEAE8; color: var(--color-danger); }
 .badge-excused { background: #FBF1E4; color: var(--color-warn); }
 
+/* ---------------- Report page ---------------- */
+.lecture-card-link {
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.lecture-card-link:hover { border-color: var(--color-primary); box-shadow: var(--shadow-md); }
+
+.footnote { color: var(--color-ink-soft); font-size: 0.85rem; margin-top: 12px; }
+
+/* Shown only when printing (hidden on screen) */
+.print-header { display: none; }
+
+/* ---------------- Print ---------------- */
+@media print {
+    .topbar, .no-print { display: none !important; }
+    .content { max-width: 100%; padding: 0; }
+    body { background: #fff; }
+    .print-header { display: block; margin-bottom: 16px; }
+    .print-header h1 { margin-bottom: 4px; }
+    .print-header p { color: var(--color-ink-soft); font-size: 0.85rem; margin: 0; }
+    .data-table { box-shadow: none; border: 1px solid #ccc; }
+    .data-table th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+    .badge { border: 1px solid currentColor; }
+}
+
 /* ---------------- Responsive ---------------- */
 @media (max-width: 560px) {
     .content { padding: 20px 16px; }
