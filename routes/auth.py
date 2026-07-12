@@ -23,6 +23,7 @@ def login():
         if lecturer and lecturer.check_password(password):
             session["lecturer_id"] = lecturer.lecturer_id
             session["lecturer_name"] = lecturer.full_name
+            session["is_admin"] = lecturer.is_admin  # NEW: drives Admin Panel nav link
             return redirect(url_for("attendance.dashboard"))
 
         flash("Invalid username or password.")
