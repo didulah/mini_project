@@ -14,7 +14,7 @@ class Student(db.Model):
 
     student_id = db.Column(db.Integer, primary_key=True)  # e.g. 249001, entered manually
     name = db.Column(db.String(120), nullable=False)
-    fingerprint_id = db.Column(db.Integer, unique=True)
+    fingerprint_id = db.Column(db.Integer, unique=True)  # nullable - assigned later during hardware enrollment
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     enrollments = db.relationship("Enrollment", backref="student", lazy=True)
@@ -31,6 +31,7 @@ class Lecturer(db.Model):
     username = db.Column(db.String(80), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(120), nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)  # NEW: admin panel access
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     timetable_entries = db.relationship("Timetable", backref="lecturer", lazy=True)
