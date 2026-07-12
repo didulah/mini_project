@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+<style>
+    .admin-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0 2rem;
+    }
+    .admin-card {
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        padding: 1.25rem;
+        text-align: center;
+    }
+    .admin-card .num {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2rem;
+        font-weight: 700;
+        display: block;
+    }
+    .admin-card .label {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    .admin-card.warn .num { color: #b45309; }
+    .admin-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .admin-actions a {
+        display: inline-block;
+        padding: 0.7rem 1.3rem;
+        border-radius: 8px;
+        background: #111;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .admin-actions a.secondary {
+        background: #fff;
+        color: #111;
+        border: 1px solid #ccc;
+    }
+</style>
+
+<h1>Admin Panel</h1>
+<p>Students, Lecturers සහ Timetable data manage කරන්න මෙතනින්.</p>
+
+<div class="admin-grid">
+    <div class="admin-card">
+        <span class="num">{{ student_count }}</span>
+        <span class="label">Total Students</span>
+    </div>
+    <div class="admin-card">
+        <span class="num">{{ lecturer_count }}</span>
+        <span class="label">Total Lecturers</span>
+    </div>
+    <div class="admin-card">
+        <span class="num">{{ subject_count }}</span>
+        <span class="label">Subjects</span>
+    </div>
+    <div class="admin-card {% if unenrolled_fingerprint_count > 0 %}warn{% endif %}">
+        <span class="num">{{ unenrolled_fingerprint_count }}</span>
+        <span class="label">Fingerprint Pending</span>
+    </div>
+</div>
+
+<div class="admin-actions">
+    <a href="{{ url_for('admin.add_student') }}">+ Add Student</a>
+    <a href="{{ url_for('admin.add_lecturer') }}">+ Add Lecturer</a>
+    <a class="secondary" href="{{ url_for('admin.list_students') }}">View Students</a>
+    <a class="secondary" href="{{ url_for('admin.list_lecturers') }}">View Lecturers</a>
+</div>
+{% endblock %}
