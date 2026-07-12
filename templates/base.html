@@ -25,6 +25,9 @@
                 <a href="{{ url_for('attendance.dashboard') }}">Dashboard</a>
                 <a href="{{ url_for('attendance.report_subjects') }}">Reports</a>
                 <a href="{{ url_for('attendance.student_history') }}">Student History</a>
+                {% if session.get('is_admin') %}
+                    <a href="{{ url_for('admin.admin_dashboard') }}">Admin Panel</a>
+                {% endif %}
                 <span class="lecturer-name">{{ session.get('lecturer_name') }}</span>
                 <a href="{{ url_for('auth.logout') }}">Logout</a>
             </nav>
