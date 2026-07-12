@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Lecturers{% endblock %}
+
+{% block content %}
+<style>
+    table.admin-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        margin-top: 1rem;
+    }
+    table.admin-table th, table.admin-table td {
+        text-align: left;
+        padding: 0.6rem 0.8rem;
+        border-bottom: 1px solid #eee;
+    }
+    table.admin-table th {
+        background: #fafafa;
+        font-family: 'Space Grotesk', sans-serif;
+    }
+    .pill {
+        display: inline-block;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        background: #e0e7ff; color: #3730a3;
+    }
+    .top-actions { margin-bottom: 1rem; }
+    .top-actions a {
+        color: #fff; background: #111; padding: 0.5rem 1rem;
+        border-radius: 6px; text-decoration: none; font-size: 0.9rem;
+    }
+</style>
+
+<h1>Lecturers ({{ lecturers|length }})</h1>
+<div class="top-actions">
+    <a href="{{ url_for('admin.add_lecturer') }}">+ Add Lecturer</a>
+</div>
+
+<table class="admin-table">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Full Name</th>
+            <th>Role</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for l in lecturers %}
+        <tr>
+            <td>{{ l.username }}</td>
+            <td>{{ l.full_name }}</td>
+            <td>{% if l.is_admin %}<span class="pill">Admin</span>{% else %}Lecturer{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">No lecturers yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
