@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Add Student{% endblock %}
+
+{% block content %}
+<style>
+    .form-card {
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        padding: 1.5rem;
+        max-width: 480px;
+    }
+    .form-card label {
+        display: block;
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+        font-weight: 500;
+    }
+    .form-card input[type="text"],
+    .form-card input[type="number"] {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-sizing: border-box;
+    }
+    .hint {
+        font-size: 0.8rem;
+        color: #777;
+        margin-top: 0.2rem;
+    }
+    .subject-list {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 0.6rem 0.9rem;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 0.3rem;
+    }
+    .subject-list label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 400;
+        margin: 0.4rem 0;
+    }
+    .submit-btn {
+        margin-top: 1.5rem;
+        padding: 0.7rem 1.5rem;
+        background: #111;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+</style>
+
+<h1>Add Student</h1>
+
+<div class="form-card">
+    <form method="POST">
+        <label for="student_id">Student ID</label>
+        <input type="text" id="student_id" name="student_id" placeholder="e.g. 249001" required>
+
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="fingerprint_id">Fingerprint ID (optional)</label>
+        <input type="text" id="fingerprint_id" name="fingerprint_id" placeholder="Leave blank if not enrolled yet">
+        <div class="hint">Hardware enrollment සිදු කරන තෙක් blank ලෙස තියන්න පුලුවන්. පස්සේ update කරගන්න පුලුවන්.</div>
+
+        {% if subjects %}
+        <label>Enroll in Subjects</label>
+        <div class="subject-list">
+            {% for s in subjects %}
+            <label>
+                <input type="checkbox" name="subject_ids" value="{{ s.subject_id }}">
+                {{ s.subject_code }} — {{ s.subject_name }}
+            </label>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="hint">No subjects found yet. Add subjects/timetable first if you want to enroll students now — you can also enroll later.</div>
+        {% endif %}
+
+        <button type="submit" class="submit-btn">Add Student</button>
+    </form>
+</div>
+{% endblock %}
