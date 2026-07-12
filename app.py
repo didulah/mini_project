@@ -19,10 +19,12 @@ def create_app(config_class=Config):
     from routes.auth import auth_bp
     from routes.attendance import attendance_bp
     from routes.api import api_bp
+    from routes.admin import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(attendance_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/admin")
 
     with app.app_context():
         db.create_all()
