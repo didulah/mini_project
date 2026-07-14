@@ -45,3 +45,22 @@ def scan():
     db.session.commit()
 
     return jsonify({"message": f"Attendance marked for {student.name}"}), 200
+
+@api_bp.route("/active_session", methods=["GET"])
+def active_session():
+    """
+    ESP32 polls this periodically using its fixed timetable_id
+    to discover whether a lecturer has started a session.
+
+    Query param: ?timetable_id=X
+    Response: { "session_id": 7 } or { "session_id": null }
+    """
+    timetable_id = request.args.get("timetable_id", type=int)
+    if timetable_id is None:
+        return jsonify({"error": "timetable_id is required"}), 400
+
+    lecture_session = LectureSession.query.filter_by(
+        timetable_id=timetable_id, status="active"
+    ).order_by(LectureSession.session_id.desc()).first()
+
+    return jsonify({"session_id": lecture_session.session_id if lecture_session else None}), 200
