@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Assign Fingerprint{% endblock %}
+
+{% block content %}
+<style>
+    .form-card {
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        padding: 1.5rem;
+        max-width: 480px;
+    }
+    .form-card label {
+        display: block;
+        margin-top: 1rem;
+        margin-bottom: 0.3rem;
+        font-weight: 500;
+    }
+    .form-card select,
+    .form-card input[type="text"] {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-sizing: border-box;
+    }
+    .hint {
+        font-size: 0.8rem;
+        color: #777;
+        margin-top: 0.2rem;
+    }
+    .submit-btn {
+        margin-top: 1.5rem;
+        padding: 0.7rem 1.5rem;
+        background: #111;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    .empty-state {
+        padding: 1rem;
+        background: #f6f6f6;
+        border-radius: 8px;
+        color: #555;
+    }
+</style>
+
+<h1>Assign Fingerprint</h1>
+
+{% if students %}
+<div class="form-card">
+    <form method="POST">
+        <label for="student_id">Student</label>
+        <select id="student_id" name="student_id" required>
+            <option value="" disabled selected>-- Select student --</option>
+            {% for s in students %}
+            <option value="{{ s.student_id }}">{{ s.student_id }} — {{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="fingerprint_id">Fingerprint ID (from R307S enrollment)</label>
+        <input type="text" id="fingerprint_id" name="fingerprint_id"
+               placeholder="e.g. 12" required>
+        <div class="hint">
+            R307S sensor එකේ enrollment mode එකෙන් ලැබෙන template ID number එක
+            (fingerprint sensor එකෙන් enroll කරද්දී එයාට automatic assign වෙන
+            number එක) මෙතන දාන්න.
+        </div>
+
+        <button type="submit" class="submit-btn">Assign Fingerprint</button>
+    </form>
+</div>
+{% else %}
+<div class="empty-state">
+    ✅ සියලුම students ලාට fingerprint IDs assign වෙලා ඉවරයි.
+    Fingerprint නැති students කෙනෙක්වත් නෑ.
+</div>
+{% endif %}
+{% endblock %}
