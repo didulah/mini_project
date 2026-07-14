@@ -73,6 +73,7 @@
 <div class="admin-actions">
     <a href="{{ url_for('admin.add_student') }}">+ Add Student</a>
     <a href="{{ url_for('admin.add_lecturer') }}">+ Add Lecturer</a>
+    <a href="{{ url_for('admin.assign_fingerprint') }}">Assign Fingerprint ({{ unenrolled_fingerprint_count }})</a>
     <a class="secondary" href="{{ url_for('admin.list_students') }}">View Students</a>
     <a class="secondary" href="{{ url_for('admin.list_lecturers') }}">View Lecturers</a>
 </div>
