@@ -65,6 +65,52 @@ TIMETABLE = [
         "start_time": "09:00",
         "end_time": "12:00",
     },
+    {
+        "subject_code": "ET003",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Tuesday",
+        "start_time": "13:00",
+        "end_time": "15:00",
+    },{
+        "subject_code": "ET001",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Wednesday",
+        "start_time": "09:00",
+        "end_time": "12:00",
+    },
+    {
+        "subject_code": "ET002",
+        "lecturer_username": "Kalana",
+        "day_of_week": "Wednesday",
+        "start_time": "13:00",
+        "end_time": "15:00",
+    },{
+        "subject_code": "ET001",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Thursday",
+        "start_time": "09:00",
+        "end_time": "12:00",
+    },
+    {
+        "subject_code": "ET003",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Thursday",
+        "start_time": "13:00",
+        "end_time": "15:00",
+    },{
+        "subject_code": "ET001",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Friday",
+        "start_time": "09:00",
+        "end_time": "12:00",
+    },
+    {
+        "subject_code": "ET002",
+        "lecturer_username": "Kalana",
+        "day_of_week": "Friday",
+        "start_time": "13:00",
+        "end_time": "15:00",
+    },
     # ... ඔයාගේ timetable rows මෙතනට add කරන්න
 ]
 
