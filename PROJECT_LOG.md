@@ -130,3 +130,49 @@ None. Deployment is live and working with the current (Admin Panel) codebase.
 - Full code files → always create as actual downloadable files, not inline (except <20-line snippets)
 - Terminal commands as simple numbered steps
 - `"/handoff"` keyword → produce structured handoff summary of entire conversation
+
+## Session update - ESP32 firmware + admin fingerprint assignment (software prep)
+
+**Decisions confirmed:**
+- `/student/history` access control: kept as Option A (open to all logged-in
+  lecturers) - simplicity + small trusted team, no code change needed.
+
+**New files produced (not yet committed/pulled to server):**
+- `firmware/main.ino` - full ESP32 sketch: WiFi connect, polls
+  `/api/active_session?timetable_id=X`, reads R307S via
+  `Adafruit_Fingerprint`, POSTs to `/api/scan`, OLED + buzzer feedback.
+  Config placeholders at top of file: `WIFI_SSID`, `WIFI_PASSWORD`,
+  `TIMETABLE_ID`, and GPIO pin numbers (`FINGERPRINT_RX_PIN=16`,
+  `FINGERPRINT_TX_PIN=17`, `I2C_SDA_PIN=21`, `I2C_SCL_PIN=22`,
+  `BUZZER_PIN=25`).
+- `routes/api.py` addition: `GET /api/active_session?timetable_id=X` -
+  was referenced in earlier planning but missing from the live codebase;
+  added now so firmware has a session-discovery endpoint.
+- `routes/admin.py` addition: `GET/POST /admin/assign_fingerprint` -
+  lists students with `fingerprint_id IS NULL`, lets admin type in the
+  fingerprint template ID captured during R307S enrollment mode and
+  attach it to a student record.
+- `templates/admin_assign_fingerprint.html` - matching template.
+- Full wiring/pin diagram produced (ESP32 <-> R307S, OLED, DS3231, buzzer
+  + S8050 transistor, battery + charging module), including a caution
+  about confirming R307S TX/RX logic-level voltage against ESP32 GPIO
+  (3.3V) before wiring, and a note that OLED + DS3231 safely share the
+  same I2C bus (different addresses: 0x3C vs 0x68).
+
+**Not yet done:**
+- None of the above files have been committed/pushed/pulled to
+  PythonAnywhere yet.
+- `main.ino` config placeholders (WiFi credentials, `TIMETABLE_ID`, pin
+  numbers) still need real values before flashing.
+- `TIMETABLE_ID` lookup method: query production DB directly via
+  PythonAnywhere Bash console:
+  `sqlite3 database/attendance.db "SELECT * FROM timetable;"`
+  (no admin UI page for listing timetable entries yet - optional future
+  addition).
+
+**Hardware status:** still not physically in hand. Once available: wire
+per the diagram, open `firmware/main.ino` in Arduino IDE (user has this
+installed), install libraries (Adafruit Fingerprint Sensor Library,
+Adafruit SSD1306, Adafruit GFX, ArduinoJson, RTClib), fill config values,
+flash, then enroll a real fingerprint and assign it via
+`/admin/assign_fingerprint`.
