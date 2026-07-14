@@ -121,6 +121,47 @@ def add_student():
 
     return render_template("admin_add_student.html", subjects=subjects)
 
+@admin_bp.route("/assign_fingerprint", methods=["GET", "POST"])
+@admin_required
+def assign_fingerprint():
+    """
+    Attach a hardware fingerprint template ID (captured on the R307S
+    sensor's own onboard enrollment mode) to an existing student record.
+    """
+    unenrolled = (
+        Student.query.filter(Student.fingerprint_id.is_(None))
+        .order_by(Student.student_id)
+        .all()
+    )
+
+    if request.method == "POST":
+        student_id = request.form.get("student_id", type=int)
+        fingerprint_id_raw = request.form.get("fingerprint_id", "").strip()
+
+        student = Student.query.get(student_id)
+        if not student:
+            flash("Student not found.")
+            return redirect(url_for("admin.assign_fingerprint"))
+
+        if not fingerprint_id_raw.isdigit():
+            flash("Fingerprint ID must be a number.")
+            return redirect(url_for("admin.assign_fingerprint"))
+
+        fingerprint_id = int(fingerprint_id_raw)
+        existing = Student.query.filter_by(fingerprint_id=fingerprint_id).first()
+        if existing:
+            flash(
+                f"Fingerprint ID {fingerprint_id} is already assigned to "
+                f"{existing.name} ({existing.student_id})."
+            )
+            return redirect(url_for("admin.assign_fingerprint"))
+
+        student.fingerprint_id = fingerprint_id
+        db.session.commit()
+        flash(f"Fingerprint ID {fingerprint_id} assigned to {student.name}.")
+        return redirect(url_for("admin.assign_fingerprint"))
+
+    return render_template("admin_assign_fingerprint.html", students=unenrolled)
 
 # ---------------------------------------------------------------------------
 # Lecturers
