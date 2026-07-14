@@ -43,8 +43,8 @@
 // ===================== USER CONFIG - CONFIRM BEFORE FLASHING =====================
 
 // ---- WiFi ----
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";       // TODO: confirm
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";   // TODO: confirm
+const char* WIFI_SSID     = "A06";       // TODO: confirm
+const char* WIFI_PASSWORD = "88888888";   // TODO: confirm
 
 // ---- Server ----
 // PythonAnywhere free-tier apps are served over HTTPS only.
