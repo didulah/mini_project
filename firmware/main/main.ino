@@ -30,7 +30,6 @@
     - ArduinoJson (v6+)
     - RTClib (for DS3231) [only used for on-screen clock, optional]
 */
-
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
