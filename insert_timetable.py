@@ -7,6 +7,10 @@ Subjects සහ Timetable entries manually insert කරන්න use කරන 
     - subject_code එකක් දැනටමත් DB එකේ තියෙනවා නම් - ඒක SKIP කරනවා (duplicate හදන්නෙ නෑ)
     - timetable row එකක් (same subject + lecturer + day + start_time) දැනටමත් තියෙනවා නම් - SKIP කරනවා
     - අලුත් row එකක් නම් විතරක් INSERT කරනවා
+    - අවසානයේදී sync_all_enrollments() call වෙනවා - ඒකෙන් අලුතෙන් add උනු
+      subject එකකට, දැනටමත් ඉන්න සියලුම students ලා auto-enroll වෙනවා
+      (subject select කරන්න ඕන නෑ - හැම student කෙනෙක්ම හැම subject එකක්ම
+      හදාරනවා කියන model එකට අනුව)
 
 භාවිතය:
     1. පහළ SUBJECTS සහ TIMETABLE list දෙක ඔයාගේ actual data එකට ගැලපෙන්න edit කරන්න
@@ -19,7 +23,7 @@ from datetime import datetime
 
 from app import create_app
 from extensions import db
-from models import Subject, Lecturer, Timetable
+from models import Subject, Lecturer, Timetable, sync_all_enrollments
 
 
 # ---------------------------------------------------------------------------
@@ -217,5 +221,9 @@ if __name__ == "__main__":
 
         print("=== Timetable insert කරමින්... ===")
         insert_timetable()
+
+        print("=== Enrollments sync කරමින් (සියලුම students -> සියලුම subjects)... ===")
+        added = sync_all_enrollments()
+        print(f"{added} enrollment record(s) added.\n")
 
         print("Done!")
