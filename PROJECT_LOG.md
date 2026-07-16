@@ -176,3 +176,38 @@ installed), install libraries (Adafruit Fingerprint Sensor Library,
 Adafruit SSD1306, Adafruit GFX, ArduinoJson, RTClib), fill config values,
 flash, then enroll a real fingerprint and assign it via
 `/admin/assign_fingerprint`.
+
+## Session Update — 2026-07-16 (Hardware testing round)
+
+**Context:** Physical hardware (ESP32 + R307S) now in hand, several students enrolled with real fingerprint templates. First live end-to-end tests run against the deployed app.
+
+### Bugs found & fixed this session
+
+1. **Live Attendance view never updated** — `session.html` had no auto-refresh; page only reflected data from the moment it was first loaded. Fixed with a `setTimeout(() => location.reload(), 5000)` script, active only while `lecture_session.status == 'active'`.
+2. **No way to close a session** — `end_session()` route added to `routes/attendance.py` (`POST /session/end/<session_id>`), sets `status='closed'` + `ended_at`. `/api/scan` already rejected scans on closed sessions, so this was the missing piece to stop late/proxy scans after class ends. "End Session" button added to `session.html` (shown only while active, with a JS confirm dialog).
+3. **500 Internal Server Error (TemplateSyntaxError)** — caused by a literal `{% if %}` typed inside a JS *comment* in `session.html`. Jinja parses `{% %}` anywhere in the file regardless of context (HTML/JS/comment). Fixed by rewording the comment to avoid literal Jinja syntax.
+4. **Root cause of "OLED says success but web shows Absent"** — ESP32 firmware had `TIMETABLE_ID = 1` (an unconfirmed placeholder, never updated from the template default). It was silently marking attendance against a stale `session_id=1`, not the `session_id=7` the lecturer was viewing in-browser. Confirmed via direct SQLite queries on `lecture_sessions` / `attendance_records`. Fixed by setting `TIMETABLE_ID = 7` (the real value for the subject under test) and re-flashing.
+5. **6 dangling `active` sessions (session_id 1–6)** found — leftovers from earlier testing rounds, before `end_session()` existed. Manually closed via:
+   ```sql
+   UPDATE lecture_sessions SET status='closed', ended_at=datetime('now') WHERE session_id IN (1,2,3,4,5,6);
+   ```
+6. **`marked_time` displayed in UTC, not Sri Lanka local time** — `datetime.utcnow()` is correct for storage, but templates rendered it raw. Added `AttendanceRecord.marked_time_local` property in `models.py` (`SRI_LANKA_OFFSET = timedelta(hours=5, minutes=30)`), and switched `session.html` to use it. (`attendance_update.html` doesn't display `marked_time` at all, so no change needed there.)
+7. **Demo-mode fallback added** so the single physical device can test multiple subjects without re-flashing between them:
+   - `routes/api.py`: `timetable_id` query param on `/api/active_session` is now **optional**. If given → production behavior (only that exact timetable_id's active session counts). If omitted → returns whichever session is currently active, most-recently-started, across the whole system.
+   - `firmware/main.ino`: new `const bool DEMO_MODE` flag. When `true`, ESP32 calls `/api/active_session` without the `timetable_id` param. **Two lecturers must not start sessions for different subjects at the same time while DEMO_MODE is true** — the device can only follow one. Set `DEMO_MODE = false` (and confirm `TIMETABLE_ID`) before any real single-classroom deployment.
+8. **Transient PythonAnywhere "Something went wrong :-( / Unhandled Exception"** — resolved by a simple Reload; did not reproduce. Likely a free-tier reload hiccup rather than an app bug, but keep an eye out if it recurs.
+
+### ⚠️ Unverified — check first in next session
+Confirm these files are actually **committed, pushed, and pulled** on the PythonAnywhere server (some fixes were only handed over as downloadable files in chat and may not be deployed yet):
+- `models.py` (marked_time_local + SRI_LANKA_OFFSET)
+- `routes/api.py` (optional timetable_id / demo-mode active_session)
+- `routes/attendance.py` (end_session route)
+- `templates/session.html` (auto-refresh + End Session button + jinja fix + marked_time_local)
+- `firmware/main.ino` (TIMETABLE_ID=7, DEMO_MODE=true) — also re-flash ESP32 if not already done
+
+Run on the server to double check:
+```bash
+cd ~/mini_project
+git log --oneline -5
+git status
+```
