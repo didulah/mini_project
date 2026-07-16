@@ -60,7 +60,7 @@
                     <td class="mono">{{ student.student_id }}</td>
                     <td>{{ student.name }}</td>
                     <td><span class="badge badge-{{ record.status }}">{{ record.status }}</span></td>
-                    <td class="mono">{{ record.marked_time.strftime('%H:%M:%S') if record.marked_time else '—' }}</td>
+                    <td class="mono">{{ record.marked_time_local.strftime('%H:%M:%S') if record.marked_time_local else '—' }}</td>
                     <td class="no-print">
                         <a href="{{ url_for('attendance.update_attendance', record_id=record.record_id) }}" class="btn btn-ghost btn-small">Update</a>
                     </td>
