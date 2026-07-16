@@ -34,6 +34,12 @@
         <button type="button" class="btn btn-primary" onclick="window.print()">Print / Save as PDF</button>
         {% if lecture_session.status == 'active' %}
             <span class="eyebrow" id="autoRefreshLabel">Live &middot; updates every 5s</span>
+            <form method="POST"
+                  action="{{ url_for('attendance.end_session', session_id=lecture_session.session_id) }}"
+                  style="display:inline"
+                  onsubmit="return confirm('Session එක end කරන්නද? මේකෙන් පස්සේ තව fingerprint scan වලට attendance mark වෙන්නෑ.');">
+                <button type="submit" class="btn btn-ghost" style="border-color:#c0392b;color:#c0392b;">End Session</button>
+            </form>
         {% endif %}
     </div>
 
