@@ -49,18 +49,31 @@ def scan():
 @api_bp.route("/active_session", methods=["GET"])
 def active_session():
     """
-    ESP32 polls this periodically using its fixed timetable_id
-    to discover whether a lecturer has started a session.
+    ESP32 polls this periodically to discover whether a lecturer has
+    started a session.
 
-    Query param: ?timetable_id=X
+    Two modes, controlled by whether ?timetable_id= is sent:
+
+    - PRODUCTION (timetable_id given): device is permanently tied to one
+      classroom/subject slot - only an active session for that exact
+      timetable_id counts. Safe for multiple devices/classrooms running
+      at the same time.
+    - DEMO (timetable_id omitted): returns whichever session was started
+      most recently, across ALL timetable entries. Convenient for a
+      single physical device testing several subjects without re-flashing
+      TIMETABLE_ID each time - but NOT safe if two lecturers start
+      sessions for different subjects at the same time, since the device
+      can only react to one of them.
+
+    Query param: ?timetable_id=X (optional)
     Response: { "session_id": 7 } or { "session_id": null }
     """
     timetable_id = request.args.get("timetable_id", type=int)
-    if timetable_id is None:
-        return jsonify({"error": "timetable_id is required"}), 400
 
-    lecture_session = LectureSession.query.filter_by(
-        timetable_id=timetable_id, status="active"
-    ).order_by(LectureSession.session_id.desc()).first()
+    query = LectureSession.query.filter_by(status="active")
+    if timetable_id is not None:
+        query = query.filter_by(timetable_id=timetable_id)
+
+    lecture_session = query.order_by(LectureSession.started_at.desc()).first()
 
     return jsonify({"session_id": lecture_session.session_id if lecture_session else None}), 200
