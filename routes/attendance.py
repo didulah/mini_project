@@ -73,6 +73,36 @@ def start_session(timetable_id):
     return redirect(url_for("attendance.session_view", session_id=lecture_session.session_id))
 
 
+@attendance_bp.route("/session/end/<int:session_id>", methods=["POST"])
+def end_session(session_id):
+    """
+    'End Session' button එකෙන් call වෙන route එක.
+
+    - status එක 'closed' ලෙස set කරලා ended_at timestamp එකත් save කරනවා.
+    - Session එක 'closed' උනාට පස්සේ /api/scan endpoint එකෙන් (already existing
+      check එකක් හරහා) තව scan requests reject කරනවා - late/proxy scans
+      prevent වෙනවා.
+    - Already closed session එකක් accidentally ආපහු end_session කරන්න try
+      කළොත් (double-click, back button) කිසිත් වෙන්නෑ - idempotent.
+    - start_session()/session_view() වල තියෙන ownership check එකම pattern එක.
+    """
+    if not _lecturer_logged_in():
+        return redirect(url_for("auth.login"))
+
+    lecture_session = LectureSession.query.get_or_404(session_id)
+    timetable_entry = lecture_session.timetable_entry
+
+    if timetable_entry.lecturer_id != session["lecturer_id"]:
+        abort(403)
+
+    if lecture_session.status == "active":
+        lecture_session.status = "closed"
+        lecture_session.ended_at = datetime.utcnow()
+        db.session.commit()
+
+    return redirect(url_for("attendance.session_view", session_id=session_id))
+
+
 @attendance_bp.route("/session/<int:session_id>")
 def session_view(session_id):
     """
