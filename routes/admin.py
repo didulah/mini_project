@@ -5,7 +5,9 @@ Routes:
     GET  /admin/dashboard      -> overview + links
     GET  /admin/students       -> list all students
     GET  /admin/lecturers      -> list all lecturers
-    GET/POST /admin/add_student   -> create a new student (+ subject enrollment)
+    GET/POST /admin/add_student   -> create a new student
+                                     (auto-enrolled into ALL subjects - no
+                                      manual subject selection needed anymore)
     GET/POST /admin/add_lecturer  -> create a new lecturer (optionally as admin)
 """
 from functools import wraps
@@ -13,7 +15,7 @@ from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 
 from extensions import db
-from models import Student, Lecturer, Subject, Enrollment
+from models import Student, Lecturer, Subject, Enrollment, sync_all_enrollments
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -78,48 +80,45 @@ def list_students():
 @admin_bp.route("/add_student", methods=["GET", "POST"])
 @admin_required
 def add_student():
-    subjects = Subject.query.order_by(Subject.subject_code).all()
-
     if request.method == "POST":
         student_id_raw = request.form.get("student_id", "").strip()
         name = request.form.get("name", "").strip()
         fingerprint_id_raw = request.form.get("fingerprint_id", "").strip()
-        subject_ids = request.form.getlist("subject_ids")  # list of strings
 
         # --- Validation ---
         if not student_id_raw.isdigit() or not name:
             flash("Student ID (numbers only) and Name are required.")
-            return render_template("admin_add_student.html", subjects=subjects)
+            return render_template("admin_add_student.html")
 
         student_id = int(student_id_raw)
 
         if Student.query.get(student_id):
             flash(f"Student ID {student_id} already exists.")
-            return render_template("admin_add_student.html", subjects=subjects)
+            return render_template("admin_add_student.html")
 
         fingerprint_id = None
         if fingerprint_id_raw:
             if not fingerprint_id_raw.isdigit():
                 flash("Fingerprint ID must be a number.")
-                return render_template("admin_add_student.html", subjects=subjects)
+                return render_template("admin_add_student.html")
             fingerprint_id = int(fingerprint_id_raw)
             if Student.query.filter_by(fingerprint_id=fingerprint_id).first():
                 flash(f"Fingerprint ID {fingerprint_id} is already assigned to another student.")
-                return render_template("admin_add_student.html", subjects=subjects)
+                return render_template("admin_add_student.html")
 
         # --- Create student ---
         student = Student(student_id=student_id, name=name, fingerprint_id=fingerprint_id)
         db.session.add(student)
-
-        # --- Subject enrollment ---
-        for sid in subject_ids:
-            db.session.add(Enrollment(student_id=student_id, subject_id=int(sid)))
-
         db.session.commit()
-        flash(f"Student {name} ({student_id}) added successfully.")
+
+        # --- Auto-enroll into every existing subject ---
+        # (subject selection removed - every student takes every subject now)
+        sync_all_enrollments()
+
+        flash(f"Student {name} ({student_id}) added and enrolled in all subjects.")
         return redirect(url_for("admin.list_students"))
 
-    return render_template("admin_add_student.html", subjects=subjects)
+    return render_template("admin_add_student.html")
 
 @admin_bp.route("/assign_fingerprint", methods=["GET", "POST"])
 @admin_required
