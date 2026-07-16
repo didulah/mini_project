@@ -53,7 +53,19 @@ const bool  USE_HTTPS   = true;
 // ---- This device's fixed classroom/subject slot ----
 // Every physical device only ever serves ONE row in the `timetable` table.
 // Look up the correct timetable_id from the deployed DB before flashing.
-const int TIMETABLE_ID = 1;   // TODO: confirm - e.g. via /admin panel or DB
+const int TIMETABLE_ID = 7;   // CONFIRMED via DB: this device serves timetable_id=7
+
+// ---- Demo mode ----
+// true  = ignore TIMETABLE_ID above, react to WHICHEVER session is
+//         currently active anywhere in the system. Handy for a single
+//         device testing several subjects during team demos without
+//         re-flashing every time you switch which lecture you're testing.
+// false = production behavior - only reacts to this device's fixed
+//         TIMETABLE_ID slot. Use this once the device is permanently
+//         assigned to one real classroom/subject.
+// !! Two lecturers should NOT start sessions for different subjects at
+// the same time while DEMO_MODE is true - the device can only follow one.
+const bool DEMO_MODE = true;
 
 // ---- Timing ----
 const unsigned long POLL_INTERVAL_MS   = 4000;   // how often to check for an active session
@@ -162,13 +174,15 @@ void connectWiFi() {
 }
 
 // -----------------------------------------------------------------------------------
-// GET /api/active_session?timetable_id=X
+// GET /api/active_session?timetable_id=X  (param omitted when DEMO_MODE)
 void pollActiveSession() {
   if (WiFi.status() != WL_CONNECTED) return;
 
   HTTPClient http;
-  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST +
-               "/api/active_session?timetable_id=" + String(TIMETABLE_ID);
+  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST + "/api/active_session";
+  if (!DEMO_MODE) {
+    url += "?timetable_id=" + String(TIMETABLE_ID);
+  }
 
   http.begin(url);
   int httpCode = http.GET();
