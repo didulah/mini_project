@@ -29,21 +29,6 @@
         color: #777;
         margin-top: 0.2rem;
     }
-    .subject-list {
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 0.6rem 0.9rem;
-        max-height: 200px;
-        overflow-y: auto;
-        margin-top: 0.3rem;
-    }
-    .subject-list label {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-weight: 400;
-        margin: 0.4rem 0;
-    }
     .submit-btn {
         margin-top: 1.5rem;
         padding: 0.7rem 1.5rem;
@@ -70,19 +55,10 @@
         <input type="text" id="fingerprint_id" name="fingerprint_id" placeholder="Leave blank if not enrolled yet">
         <div class="hint">Hardware enrollment සිදු කරන තෙක් blank ලෙස තියන්න පුලුවන්. පස්සේ update කරගන්න පුලුවන්.</div>
 
-        {% if subjects %}
-        <label>Enroll in Subjects</label>
-        <div class="subject-list">
-            {% for s in subjects %}
-            <label>
-                <input type="checkbox" name="subject_ids" value="{{ s.subject_id }}">
-                {{ s.subject_code }} — {{ s.subject_name }}
-            </label>
-            {% endfor %}
+        <div class="hint" style="margin-top: 1rem;">
+            Student ලා add කරාම, system එකේ දැනට තියෙන සියලුම subjects වලට
+            ඔහු/ඇය automatic ව enroll වෙනවා — subject වෙන වෙනම select කරන්න ඕන නෑ.
         </div>
-        {% else %}
-        <div class="hint">No subjects found yet. Add subjects/timetable first if you want to enroll students now — you can also enroll later.</div>
-        {% endif %}
 
         <button type="submit" class="submit-btn">Add Student</button>
     </form>
