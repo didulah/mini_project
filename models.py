@@ -132,3 +132,44 @@ class AttendanceRecord(db.Model):
 
     def __repr__(self):
         return f"<AttendanceRecord session={self.session_id} student={self.student_id} {self.status}>"
+
+
+# ---------------------------------------------------------------------------
+# NEW: "every student takes every subject" enrollment model
+# ---------------------------------------------------------------------------
+def sync_all_enrollments():
+    """
+    Idempotent helper - Database එකේ ඉන්න සියලුම students, දැනට ඉන්න
+    සියලුම subjects වලට enroll වෙලා ඉන්නවා කියලා සහතික කරනවා.
+
+    මොකද call කරන්නේ:
+      - අලුත් student එකක් add කරාම (subject select කරන්නේ නැති නිසා,
+        ඒ student ව දැනට ඉන්න සියලුම subjects වලට auto-enroll කරන්න)
+      - අලුත් subject එකක් add කරාම (insert_timetable.py වගේ script එකකින්
+        subject එකක් add කරාම, දැනටමත් ඉන්න students ලා ඒකටත් auto-enroll
+        කරන්න)
+
+    දෙපැත්තෙන්ම already-enrolled pairs skip කරලා, අඩුවෙන් ඉන්න
+    enrollments විතරක් INSERT කරනවා - ඒ නිසා කීපවතාවක් run කලත් error/
+    duplicate risk එකක් නෑ.
+
+    Returns: අලුතෙන් insert උනු enrollment record ගණන (int)
+    """
+    all_student_ids = [row.student_id for row in Student.query.all()]
+    all_subject_ids = [row.subject_id for row in Subject.query.all()]
+
+    existing_pairs = {
+        (e.student_id, e.subject_id) for e in Enrollment.query.all()
+    }
+
+    added = 0
+    for student_id in all_student_ids:
+        for subject_id in all_subject_ids:
+            if (student_id, subject_id) not in existing_pairs:
+                db.session.add(Enrollment(student_id=student_id, subject_id=subject_id))
+                added += 1
+
+    if added:
+        db.session.commit()
+
+    return added
