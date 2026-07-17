@@ -45,11 +45,133 @@
         border-radius: 8px;
         color: #555;
     }
+
+    /* --- device status + live enrollment table --- */
+    .status-card {
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        padding: 1.2rem 1.5rem;
+        max-width: 480px;
+        margin-bottom: 1.5rem;
+    }
+    .status-card p {
+        margin: 0 0 0.8rem 0;
+        font-weight: 500;
+    }
+    .cancel-btn {
+        padding: 0.5rem 1.2rem;
+        background: #fff;
+        color: #b00020;
+        border: 1px solid #b00020;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+    .enroll-table {
+        width: 100%;
+        max-width: 640px;
+        border-collapse: collapse;
+        margin-bottom: 2rem;
+        background: #fff;
+        border: 1px solid #e2e2e2;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .enroll-table th, .enroll-table td {
+        text-align: left;
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    .enroll-table th {
+        background: #f6f6f6;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .enroll-btn {
+        padding: 0.45rem 1rem;
+        background: #111;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .enroll-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.8rem 0;
+    }
 </style>
 
 <h1>Assign Fingerprint</h1>
 
+<!-- ===================== Device / Enrollment Status ===================== -->
+<div class="status-card">
+    <p>
+        {% if device_state.mode == "ENROLLMENT" %}
+            🟡 Waiting for fingerprint scan
+            {% if device_state.student %}for <strong>{{ device_state.student.name }}</strong> ({{ device_state.enroll_student_id }}){% endif %}
+            ... (this page refreshes automatically)
+        {% elif device_state.enroll_status == "success" %}
+            ✅ {{ device_state.enroll_message or "Enrollment successful!" }}
+        {% elif device_state.enroll_status == "failed" %}
+            ❌ {{ device_state.enroll_message or "Enrollment failed. Try again." }}
+        {% else %}
+            🟢 Device is in Attendance mode (idle)
+        {% endif %}
+    </p>
+
+    {% if device_state.mode == "ENROLLMENT" %}
+    <form method="POST" action="{{ url_for('admin.cancel_enrollment') }}" style="display:inline;">
+        <button type="submit" class="cancel-btn">Cancel Enrollment</button>
+    </form>
+    {% endif %}
+</div>
+
 {% if students %}
+
+<!-- ===================== Live hardware enrollment ===================== -->
+<p class="section-title">Students Without a Fingerprint - Start Enrollment</p>
+<table class="enroll-table">
+    <thead>
+        <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in students %}
+        <tr>
+            <td>{{ s.student_id }}</td>
+            <td>{{ s.name }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('admin.start_enrollment', student_id=s.student_id) }}">
+                    <button type="submit" class="enroll-btn" {% if device_state.mode == "ENROLLMENT" %}disabled{% endif %}>
+                        Start Enrollment
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="hint" style="margin-bottom:2rem;">
+    Click "Start Enrollment" then ask the student to scan their finger twice on the
+    device sensor. This page refreshes automatically while waiting, and stops
+    refreshing once the device reports success or failure.
+</div>
+
+<!-- ===================== Manual fallback (original form) ===================== -->
+<p class="section-title">Manual Assignment (fallback)</p>
 <div class="form-card">
     <form method="POST">
         <label for="student_id">Student</label>
@@ -64,9 +186,9 @@
         <input type="text" id="fingerprint_id" name="fingerprint_id"
                placeholder="e.g. 12" required>
         <div class="hint">
-            R307S sensor එකේ enrollment mode එකෙන් ලැබෙන template ID number එක
-            (fingerprint sensor එකෙන් enroll කරද්දී එයාට automatic assign වෙන
-            number එක) මෙතන දාන්න.
+            Only use this if you already know the fingerprint template ID (e.g. hardware
+            enrollment above failed and you noted the ID separately). R307S සෙන්සරයෙන්
+            ලැබෙන template ID number එක මෙතන දාන්න.
         </div>
 
         <button type="submit" class="submit-btn">Assign Fingerprint</button>
@@ -77,5 +199,19 @@
     ✅ සියලුම students ලාට fingerprint IDs assign වෙලා ඉවරයි.
     Fingerprint නැති students කෙනෙක්වත් නෑ.
 </div>
+{% endif %}
+
+{% if device_state.mode == "ENROLLMENT" %}
+<script>
+    // Enrollment is in progress on the device - keep refreshing the whole
+    // page every 3 seconds until the server reports the device is back
+    // in ATTENDANCE mode (success or failure recorded via /api/enroll_result).
+    // This condition is decided server-side (Jinja), so once mode flips
+    // back to ATTENDANCE, this script block is no longer rendered at all
+    // and the auto-refresh stops on its own.
+    setTimeout(function () {
+        window.location.reload();
+    }, 3000);
+</script>
 {% endif %}
 {% endblock %}

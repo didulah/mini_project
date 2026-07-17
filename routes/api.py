@@ -3,10 +3,17 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 
 from extensions import db
-from models import Student, LectureSession, AttendanceRecord
+from models import Student, LectureSession, AttendanceRecord, DeviceState
 
 api_bp = Blueprint("api", __name__)
 
+
+# ===========================================================================
+# EXISTING ATTENDANCE ENDPOINTS - UNCHANGED
+# (kept byte-for-byte the same on purpose, so the tested attendance flow
+# cannot regress. The unified firmware only calls these when device_mode
+# reports "ATTENDANCE".)
+# ===========================================================================
 
 @api_bp.route("/scan", methods=["POST"])
 def scan():
@@ -46,6 +53,7 @@ def scan():
 
     return jsonify({"message": f"Attendance marked for {student.name}"}), 200
 
+
 @api_bp.route("/active_session", methods=["GET"])
 def active_session():
     """
@@ -77,3 +85,95 @@ def active_session():
     lecture_session = query.order_by(LectureSession.started_at.desc()).first()
 
     return jsonify({"session_id": lecture_session.session_id if lecture_session else None}), 200
+
+
+# ===========================================================================
+# NEW - unified enrollment/attendance mode switching
+# ===========================================================================
+
+@api_bp.route("/device_mode", methods=["GET"])
+def device_mode():
+    """
+    ESP32 polls this FIRST on every cycle, before deciding whether to run
+    the attendance flow (existing /api/active_session + /api/scan) or the
+    enrollment flow.
+
+    Response when idle / attendance:
+        { "mode": "ATTENDANCE" }
+
+    Response when an admin has started enrollment for a student:
+        { "mode": "ENROLLMENT", "enroll_student_id": 249001, "enroll_name": "Kasun Perera" }
+    """
+    state = DeviceState.get_singleton()
+
+    if state.mode == "ENROLLMENT" and state.enroll_student_id is not None:
+        student = Student.query.get(state.enroll_student_id)
+        return jsonify({
+            "mode": "ENROLLMENT",
+            "enroll_student_id": state.enroll_student_id,
+            "enroll_name": student.name if student else None,
+        }), 200
+
+    return jsonify({"mode": "ATTENDANCE"}), 200
+
+
+@api_bp.route("/enroll_result", methods=["POST"])
+def enroll_result():
+    """
+    ESP32 calls this once after attempting a fingerprint enrollment
+    (whether it succeeded or failed), so the server can save the
+    fingerprint_id and switch the device back to ATTENDANCE mode.
+
+    Expected JSON body:
+        { "student_id": 249001, "fingerprint_id": 12, "success": true }
+      or on failure:
+        { "student_id": 249001, "success": false, "message": "timeout" }
+    """
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
+    fingerprint_id = data.get("fingerprint_id")
+    success = bool(data.get("success"))
+    message = data.get("message", "")
+
+    state = DeviceState.get_singleton()
+
+    if state.mode != "ENROLLMENT" or state.enroll_student_id != student_id:
+        # Stale/duplicate result, or admin already cancelled - ignore safely.
+        return jsonify({"error": "No matching enrollment currently in progress"}), 409
+
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    if success and fingerprint_id is not None:
+        clash = Student.query.filter(
+            Student.fingerprint_id == fingerprint_id,
+            Student.student_id != student_id,
+        ).first()
+        if clash:
+            state.enroll_status = "failed"
+            state.enroll_message = (
+                f"fingerprint_id {fingerprint_id} already assigned to "
+                f"{clash.name} ({clash.student_id})"
+            )
+            state.mode = "ATTENDANCE"
+            state.enroll_student_id = None
+            state.updated_at = datetime.utcnow()
+            db.session.commit()
+            return jsonify({"error": "fingerprint_id already assigned to another student"}), 409
+
+        student.fingerprint_id = fingerprint_id
+        state.enroll_status = "success"
+        state.enroll_message = f"Enrolled fingerprint_id={fingerprint_id} for {student.name}"
+    else:
+        state.enroll_status = "failed"
+        state.enroll_message = message or "Enrollment failed on device"
+
+    # Always hand control back to attendance mode once a result comes in -
+    # keeps the device from ever getting stuck in ENROLLMENT.
+    state.mode = "ATTENDANCE"
+    state.enroll_student_id = None
+    state.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"message": "Enrollment result recorded"}), 200

@@ -1,7 +1,7 @@
 """
 SQLAlchemy models - directly mirrors schema.sql
 (students, lecturers, subjects, enrollments, timetable,
-lecture_sessions, attendance_records)
+lecture_sessions, attendance_records, device_state)
 """
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -135,7 +135,55 @@ class AttendanceRecord(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# NEW: "every student takes every subject" enrollment model
+# NEW: Single-device operating mode (Attendance <-> Enrollment)
+# ---------------------------------------------------------------------------
+class DeviceState(db.Model):
+    """
+    Single-row table (id is always 1) that holds the ESP32's current
+    operating mode. The device polls GET /api/device_mode every few
+    seconds to read this; the Admin Panel writes to it when a lecturer
+    clicks "Start Enrollment" for a student.
+
+    mode:
+        "ATTENDANCE" (default) - device behaves exactly as it always has:
+            poll /api/active_session, scan, POST /api/scan.
+        "ENROLLMENT" - device stops polling for sessions and instead runs
+            the fingerprint enrollment routine for `enroll_student_id`,
+            then POSTs the outcome to /api/enroll_result, after which the
+            server automatically flips mode back to "ATTENDANCE".
+
+    enroll_status is purely informational, for the Admin Panel's live
+    status display (idle / waiting / success / failed).
+    """
+    __tablename__ = "device_state"
+
+    id = db.Column(db.Integer, primary_key=True)  # always 1 - singleton row
+    mode = db.Column(db.String(20), nullable=False, default="ATTENDANCE")
+    enroll_student_id = db.Column(db.Integer, db.ForeignKey("students.student_id"))
+    enroll_status = db.Column(db.String(20), nullable=False, default="idle")  # idle/waiting/success/failed
+    enroll_message = db.Column(db.String(255))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    student = db.relationship("Student", foreign_keys=[enroll_student_id])
+
+    @staticmethod
+    def get_singleton():
+        """Fetch the single DeviceState row, creating it (id=1,
+        mode=ATTENDANCE) the first time it's ever needed."""
+        state = DeviceState.query.get(1)
+        if state is None:
+            state = DeviceState(id=1, mode="ATTENDANCE", enroll_status="idle")
+            db.session.add(state)
+            db.session.commit()
+        return state
+
+    def __repr__(self):
+        return f"<DeviceState mode={self.mode} enroll_student_id={self.enroll_student_id}>"
+
+
+# ---------------------------------------------------------------------------
+# "every student takes every subject" enrollment-in-subjects model
+# (unrelated to fingerprint enrollment above - naming clash is pre-existing)
 # ---------------------------------------------------------------------------
 def sync_all_enrollments():
     """
