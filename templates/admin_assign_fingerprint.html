@@ -2,80 +2,125 @@
 {% block title %}Assign Fingerprint{% endblock %}
 
 {% block content %}
-<style>
-    .form-card {
-        background: #fff;
-        border: 1px solid #e2e2e2;
-        border-radius: 10px;
-        padding: 1.5rem;
-        max-width: 480px;
-    }
-    .form-card label {
-        display: block;
-        margin-top: 1rem;
-        margin-bottom: 0.3rem;
-        font-weight: 500;
-    }
-    .form-card select,
-    .form-card input[type="text"] {
-        width: 100%;
-        padding: 0.5rem;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        box-sizing: border-box;
-    }
-    .hint {
-        font-size: 0.8rem;
-        color: #777;
-        margin-top: 0.2rem;
-    }
-    .submit-btn {
-        margin-top: 1.5rem;
-        padding: 0.7rem 1.5rem;
-        background: #111;
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 500;
-    }
-    .empty-state {
-        padding: 1rem;
-        background: #f6f6f6;
-        border-radius: 8px;
-        color: #555;
-    }
-</style>
-
 <h1>Assign Fingerprint</h1>
 
-{% if students %}
-<div class="form-card">
-    <form method="POST">
-        <label for="student_id">Student</label>
-        <select id="student_id" name="student_id" required>
-            <option value="" disabled selected>-- Select student --</option>
-            {% for s in students %}
-            <option value="{{ s.student_id }}">{{ s.student_id }} — {{ s.name }}</option>
-            {% endfor %}
-        </select>
+<!--
+  NOTE: This assumes your project's base.html already provides the page
+  shell/nav (as your other admin_*.html templates do). If your existing
+  admin_assign_fingerprint.html has extra layout/CSS classes from
+  style.css, copy those wrapper divs in around the sections below -
+  the important new pieces are the "enrollment-status" box and the
+  "Start Enrollment" buttons + JS at the bottom.
+-->
 
-        <label for="fingerprint_id">Fingerprint ID (from R307S enrollment)</label>
-        <input type="text" id="fingerprint_id" name="fingerprint_id"
-               placeholder="e.g. 12" required>
-        <div class="hint">
-            R307S sensor එකේ enrollment mode එකෙන් ලැබෙන template ID number එක
-            (fingerprint sensor එකෙන් enroll කරද්දී එයාට automatic assign වෙන
-            number එක) මෙතන දාන්න.
-        </div>
+<section id="enrollment-status" class="card" style="margin-bottom: 1.5rem;">
+  <h2>Device Status</h2>
+  <p id="status-line">
+    {% if device_state.mode == "ENROLLMENT" %}
+      🟡 Waiting for fingerprint scan
+      {% if device_state.student %}for <strong>{{ device_state.student.name }}</strong> ({{ device_state.enroll_student_id }}){% endif %}
+      ...
+    {% else %}
+      🟢 Device is in Attendance mode (idle)
+    {% endif %}
+  </p>
 
-        <button type="submit" class="submit-btn">Assign Fingerprint</button>
+  {% if device_state.mode == "ENROLLMENT" %}
+    <form method="post" action="{{ url_for('admin.cancel_enrollment') }}" style="display:inline;">
+      <button type="submit" class="btn btn-secondary">Cancel Enrollment</button>
     </form>
-</div>
-{% else %}
-<div class="empty-state">
-    ✅ සියලුම students ලාට fingerprint IDs assign වෙලා ඉවරයි.
-    Fingerprint නැති students කෙනෙක්වත් නෑ.
-</div>
-{% endif %}
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom: 1.5rem;">
+  <h2>Students Without a Fingerprint</h2>
+
+  {% if students %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Student ID</th>
+        <th>Name</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for student in students %}
+      <tr>
+        <td>{{ student.student_id }}</td>
+        <td>{{ student.name }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin.start_enrollment', student_id=student.student_id) }}" style="display:inline;">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              {% if device_state.mode == "ENROLLMENT" %}disabled{% endif %}
+            >
+              Start Enrollment
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>All students already have a fingerprint assigned. 🎉</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Manual Assignment (fallback)</h2>
+  <p>Only use this if you already know the fingerprint template ID (e.g. hardware enrollment failed and you noted the ID separately).</p>
+  <form method="post" action="{{ url_for('admin.assign_fingerprint') }}">
+    <label for="student_id">Student</label>
+    <select name="student_id" id="student_id" required>
+      {% for student in students %}
+      <option value="{{ student.student_id }}">{{ student.student_id }} - {{ student.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="fingerprint_id">Fingerprint ID</label>
+    <input type="text" name="fingerprint_id" id="fingerprint_id" required>
+
+    <button type="submit" class="btn btn-secondary">Assign Manually</button>
+  </form>
+</section>
+
+<script>
+// Polls /admin/enrollment_status every 2 seconds while this page is open,
+// so the admin sees success/failure the moment the ESP32 reports back -
+// without needing to refresh the page manually.
+(function () {
+  const statusLine = document.getElementById("status-line");
+  let polling = true;
+
+  async function poll() {
+    if (!polling) return;
+    try {
+      const res = await fetch("{{ url_for('admin.enrollment_status') }}");
+      const data = await res.json();
+
+      if (data.mode === "ENROLLMENT") {
+        statusLine.textContent = "🟡 Waiting for fingerprint scan...";
+      } else if (data.enroll_status === "success") {
+        statusLine.textContent = "✅ " + (data.enroll_message || "Enrollment successful!");
+        polling = false;
+        setTimeout(() => window.location.reload(), 1500);
+      } else if (data.enroll_status === "failed") {
+        statusLine.textContent = "❌ " + (data.enroll_message || "Enrollment failed. Try again.");
+        polling = false;
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        statusLine.textContent = "🟢 Device is in Attendance mode (idle)";
+      }
+    } catch (err) {
+      // Network hiccup - just try again on the next tick.
+    }
+    setTimeout(poll, 2000);
+  }
+
+  poll();
+})();
+</script>
 {% endblock %}
