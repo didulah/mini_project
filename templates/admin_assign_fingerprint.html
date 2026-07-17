@@ -46,7 +46,7 @@
         color: #555;
     }
 
-    /* --- NEW: device status + live enrollment table --- */
+    /* --- device status + live enrollment table --- */
     .status-card {
         background: #fff;
         border: 1px solid #e2e2e2;
@@ -114,12 +114,16 @@
 <h1>Assign Fingerprint</h1>
 
 <!-- ===================== Device / Enrollment Status ===================== -->
-<div class="status-card" id="enrollment-status">
-    <p id="status-line">
+<div class="status-card">
+    <p>
         {% if device_state.mode == "ENROLLMENT" %}
             🟡 Waiting for fingerprint scan
             {% if device_state.student %}for <strong>{{ device_state.student.name }}</strong> ({{ device_state.enroll_student_id }}){% endif %}
-            ...
+            ... (this page refreshes automatically)
+        {% elif device_state.enroll_status == "success" %}
+            ✅ {{ device_state.enroll_message or "Enrollment successful!" }}
+        {% elif device_state.enroll_status == "failed" %}
+            ❌ {{ device_state.enroll_message or "Enrollment failed. Try again." }}
         {% else %}
             🟢 Device is in Attendance mode (idle)
         {% endif %}
@@ -162,7 +166,8 @@
 </table>
 <div class="hint" style="margin-bottom:2rem;">
     Click "Start Enrollment" then ask the student to scan their finger twice on the
-    device sensor. This page will update automatically once the device reports back.
+    device sensor. This page refreshes automatically while waiting, and stops
+    refreshing once the device reports success or failure.
 </div>
 
 <!-- ===================== Manual fallback (original form) ===================== -->
@@ -196,40 +201,17 @@
 </div>
 {% endif %}
 
+{% if device_state.mode == "ENROLLMENT" %}
 <script>
-// Polls /admin/enrollment_status every 2 seconds so the admin sees
-// success/failure the moment the ESP32 reports back, without needing to
-// refresh the page manually.
-(function () {
-    const statusLine = document.getElementById("status-line");
-    let polling = true;
-
-    async function poll() {
-        if (!polling) return;
-        try {
-            const res = await fetch("{{ url_for('admin.enrollment_status') }}");
-            const data = await res.json();
-
-            if (data.mode === "ENROLLMENT") {
-                statusLine.textContent = "🟡 Waiting for fingerprint scan...";
-            } else if (data.enroll_status === "success") {
-                statusLine.textContent = "✅ " + (data.enroll_message || "Enrollment successful!");
-                polling = false;
-                setTimeout(() => window.location.reload(), 1500);
-            } else if (data.enroll_status === "failed") {
-                statusLine.textContent = "❌ " + (data.enroll_message || "Enrollment failed. Try again.");
-                polling = false;
-                setTimeout(() => window.location.reload(), 2500);
-            } else {
-                statusLine.textContent = "🟢 Device is in Attendance mode (idle)";
-            }
-        } catch (err) {
-            // Network hiccup - just try again on the next tick.
-        }
-        setTimeout(poll, 2000);
-    }
-
-    poll();
-})();
+    // Enrollment is in progress on the device - keep refreshing the whole
+    // page every 3 seconds until the server reports the device is back
+    // in ATTENDANCE mode (success or failure recorded via /api/enroll_result).
+    // This condition is decided server-side (Jinja), so once mode flips
+    // back to ATTENDANCE, this script block is no longer rendered at all
+    // and the auto-refresh stops on its own.
+    setTimeout(function () {
+        window.location.reload();
+    }, 3000);
 </script>
+{% endif %}
 {% endblock %}
