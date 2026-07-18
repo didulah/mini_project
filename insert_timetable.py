@@ -35,6 +35,7 @@ SUBJECTS = [
     {"subject_code": "ET001", "subject_name": "Engineering Maths"},
     {"subject_code": "ET002", "subject_name": "Computer Programming"},
     {"subject_code": "ET003", "subject_name": "Electrical Circuits"},
+    {"subject_code": "ET004", "subject_name": "Physics"},
     # ... ඔයාගේ subjects මෙතනට add කරන්න
 ]
 
@@ -114,6 +115,20 @@ TIMETABLE = [
         "day_of_week": "Friday",
         "start_time": "13:00",
         "end_time": "15:00",
+    },
+    {
+        "subject_code": "ET004",
+        "lecturer_username": "Kalana",
+        "day_of_week": "Saturday",
+        "start_time": "09:00",
+        "end_time": "11:00",
+    },
+    {
+        "subject_code": "ET002",
+        "lecturer_username": "Kalana",
+        "day_of_week": "Saturday",
+        "start_time": "12:00",
+        "end_time": "14:00",
     },
     # ... ඔයාගේ timetable rows මෙතනට add කරන්න
 ]
