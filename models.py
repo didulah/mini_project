@@ -135,36 +135,49 @@ class AttendanceRecord(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# NEW: Single-device operating mode (Attendance <-> Enrollment)
+# Single-device operating mode (Attendance <-> Enrollment <-> Delete)
 # ---------------------------------------------------------------------------
 class DeviceState(db.Model):
     """
     Single-row table (id is always 1) that holds the ESP32's current
-    operating mode. The device polls GET /api/device_mode every few
-    seconds to read this; the Admin Panel writes to it when a lecturer
-    clicks "Start Enrollment" for a student.
+    operating mode. The device polls GET /api/poll every few seconds to
+    read this; the Admin Panel writes to it when a lecturer clicks
+    "Start Enrollment" or "Remove Fingerprint" for a student.
 
     mode:
         "ATTENDANCE" (default) - device behaves exactly as it always has:
-            poll /api/active_session, scan, POST /api/scan.
-        "ENROLLMENT" - device stops polling for sessions and instead runs
-            the fingerprint enrollment routine for `enroll_student_id`,
-            then POSTs the outcome to /api/enroll_result, after which the
-            server automatically flips mode back to "ATTENDANCE".
+            poll for an active session, scan, POST /api/scan.
+        "ENROLLMENT" - device runs the fingerprint enrollment routine for
+            `enroll_student_id` (using a server-assigned fingerprint_id -
+            see api.poll()), then POSTs the outcome to /api/enroll_result,
+            after which the server automatically flips mode back to
+            "ATTENDANCE".
+        "DELETE" - device runs finger.deleteModel() for
+            `delete_student_id`'s fingerprint_id, then POSTs the outcome
+            to /api/delete_result, after which the server automatically
+            flips mode back to "ATTENDANCE".
 
-    enroll_status is purely informational, for the Admin Panel's live
-    status display (idle / waiting / success / failed).
+    enroll_status / delete_status are purely informational, for the
+    Admin Panel's live status display (idle / waiting / success / failed).
     """
     __tablename__ = "device_state"
 
     id = db.Column(db.Integer, primary_key=True)  # always 1 - singleton row
     mode = db.Column(db.String(20), nullable=False, default="ATTENDANCE")
+
     enroll_student_id = db.Column(db.Integer, db.ForeignKey("students.student_id"))
     enroll_status = db.Column(db.String(20), nullable=False, default="idle")  # idle/waiting/success/failed
     enroll_message = db.Column(db.String(255))
+
+    # NEW - delete flow (mirrors the enroll_* fields above)
+    delete_student_id = db.Column(db.Integer, db.ForeignKey("students.student_id"))
+    delete_status = db.Column(db.String(20), nullable=False, default="idle")  # idle/waiting/success/failed
+    delete_message = db.Column(db.String(255))
+
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     student = db.relationship("Student", foreign_keys=[enroll_student_id])
+    delete_target_student = db.relationship("Student", foreign_keys=[delete_student_id])
 
     @staticmethod
     def get_singleton():
@@ -172,13 +185,13 @@ class DeviceState(db.Model):
         mode=ATTENDANCE) the first time it's ever needed."""
         state = DeviceState.query.get(1)
         if state is None:
-            state = DeviceState(id=1, mode="ATTENDANCE", enroll_status="idle")
+            state = DeviceState(id=1, mode="ATTENDANCE", enroll_status="idle", delete_status="idle")
             db.session.add(state)
             db.session.commit()
         return state
 
     def __repr__(self):
-        return f"<DeviceState mode={self.mode} enroll_student_id={self.enroll_student_id}>"
+        return f"<DeviceState mode={self.mode} enroll_student_id={self.enroll_student_id} delete_student_id={self.delete_student_id}>"
 
 
 # ---------------------------------------------------------------------------
