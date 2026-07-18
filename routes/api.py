@@ -8,11 +8,26 @@ from models import Student, LectureSession, AttendanceRecord, DeviceState
 api_bp = Blueprint("api", __name__)
 
 
+def _next_free_fingerprint_id():
+    """
+    Lowest positive integer not currently assigned to any student's
+    fingerprint_id. Needed because letting the ESP32 compute
+    getTemplateCount()+1 breaks once a fingerprint has been deleted
+    from the middle of the sequence (ID collisions).
+    """
+    used_ids = {
+        s.fingerprint_id
+        for s in Student.query.filter(Student.fingerprint_id.isnot(None)).all()
+    }
+    candidate = 1
+    while candidate in used_ids:
+        candidate += 1
+    return candidate
+
+
 # ===========================================================================
-# EXISTING ATTENDANCE ENDPOINTS - UNCHANGED
-# (kept byte-for-byte the same on purpose, so the tested attendance flow
-# cannot regress. The unified firmware only calls these when device_mode
-# reports "ATTENDANCE".)
+# EXISTING ATTENDANCE ENDPOINTS - UNCHANGED (kept byte-for-byte the same
+# on purpose, so the tested attendance flow cannot regress)
 # ===========================================================================
 
 @api_bp.route("/scan", methods=["POST"])
@@ -57,24 +72,8 @@ def scan():
 @api_bp.route("/active_session", methods=["GET"])
 def active_session():
     """
-    ESP32 polls this periodically to discover whether a lecturer has
-    started a session.
-
-    Two modes, controlled by whether ?timetable_id= is sent:
-
-    - PRODUCTION (timetable_id given): device is permanently tied to one
-      classroom/subject slot - only an active session for that exact
-      timetable_id counts. Safe for multiple devices/classrooms running
-      at the same time.
-    - DEMO (timetable_id omitted): returns whichever session was started
-      most recently, across ALL timetable entries. Convenient for a
-      single physical device testing several subjects without re-flashing
-      TIMETABLE_ID each time - but NOT safe if two lecturers start
-      sessions for different subjects at the same time, since the device
-      can only react to one of them.
-
-    Query param: ?timetable_id=X (optional)
-    Response: { "session_id": 7 } or { "session_id": null }
+    Kept for backward compatibility / manual testing (e.g. curl, Postman).
+    The firmware no longer calls this directly - see /api/poll below.
     """
     timetable_id = request.args.get("timetable_id", type=int)
 
@@ -87,22 +86,11 @@ def active_session():
     return jsonify({"session_id": lecture_session.session_id if lecture_session else None}), 200
 
 
-# ===========================================================================
-# NEW - unified enrollment/attendance mode switching
-# ===========================================================================
-
 @api_bp.route("/device_mode", methods=["GET"])
 def device_mode():
     """
-    ESP32 polls this FIRST on every cycle, before deciding whether to run
-    the attendance flow (existing /api/active_session + /api/scan) or the
-    enrollment flow.
-
-    Response when idle / attendance:
-        { "mode": "ATTENDANCE" }
-
-    Response when an admin has started enrollment for a student:
-        { "mode": "ENROLLMENT", "enroll_student_id": 249001, "enroll_name": "Kasun Perera" }
+    Kept for backward compatibility / manual testing. The firmware no
+    longer calls this directly - see /api/poll below.
     """
     state = DeviceState.get_singleton()
 
@@ -117,15 +105,86 @@ def device_mode():
     return jsonify({"mode": "ATTENDANCE"}), 200
 
 
+# ===========================================================================
+# NEW - single merged poll endpoint
+# ---------------------------------------------------------------------------
+# Replaces two separate ESP32 HTTPS calls (device_mode + active_session)
+# with one. Each HTTPS call is a full TLS handshake + round trip on the
+# ESP32 - merging them removes several seconds of blocking time per poll
+# cycle, which was the main cause of the ~6s scan delay.
+# ===========================================================================
+
+@api_bp.route("/poll", methods=["GET"])
+def poll():
+    """
+    ESP32 calls this ONCE per poll cycle.
+
+    Query param: ?timetable_id=X (optional - same DEMO_MODE behaviour
+    as the old /api/active_session)
+
+    Response (ATTENDANCE):
+        { "mode": "ATTENDANCE", "session_id": 7 }   # or null
+
+    Response (ENROLLMENT):
+        {
+          "mode": "ENROLLMENT",
+          "enroll_student_id": 249001,
+          "enroll_name": "Kasun Perera",
+          "enroll_fingerprint_id": 6
+        }
+
+    Response (DELETE):
+        {
+          "mode": "DELETE",
+          "delete_student_id": 249001,
+          "delete_fingerprint_id": 6
+        }
+    """
+    state = DeviceState.get_singleton()
+
+    if state.mode == "ENROLLMENT" and state.enroll_student_id is not None:
+        student = Student.query.get(state.enroll_student_id)
+        return jsonify({
+            "mode": "ENROLLMENT",
+            "enroll_student_id": state.enroll_student_id,
+            "enroll_name": student.name if student else None,
+            "enroll_fingerprint_id": _next_free_fingerprint_id(),
+        }), 200
+
+    if state.mode == "DELETE" and state.delete_student_id is not None:
+        student = Student.query.get(state.delete_student_id)
+        if not student or student.fingerprint_id is None:
+            # Nothing sensible to delete anymore - bail back to ATTENDANCE
+            # instead of leaving the device stuck in DELETE mode.
+            state.mode = "ATTENDANCE"
+            state.delete_student_id = None
+            db.session.commit()
+        else:
+            return jsonify({
+                "mode": "DELETE",
+                "delete_student_id": state.delete_student_id,
+                "delete_fingerprint_id": student.fingerprint_id,
+            }), 200
+
+    timetable_id = request.args.get("timetable_id", type=int)
+    query = LectureSession.query.filter_by(status="active")
+    if timetable_id is not None:
+        query = query.filter_by(timetable_id=timetable_id)
+    lecture_session = query.order_by(LectureSession.started_at.desc()).first()
+
+    return jsonify({
+        "mode": "ATTENDANCE",
+        "session_id": lecture_session.session_id if lecture_session else None,
+    }), 200
+
+
 @api_bp.route("/enroll_result", methods=["POST"])
 def enroll_result():
     """
-    ESP32 calls this once after attempting a fingerprint enrollment
-    (whether it succeeded or failed), so the server can save the
-    fingerprint_id and switch the device back to ATTENDANCE mode.
+    ESP32 calls this once after attempting a fingerprint enrollment.
 
     Expected JSON body:
-        { "student_id": 249001, "fingerprint_id": 12, "success": true }
+        { "student_id": 249001, "fingerprint_id": 6, "success": true }
       or on failure:
         { "student_id": 249001, "success": false, "message": "timeout" }
     """
@@ -138,7 +197,6 @@ def enroll_result():
     state = DeviceState.get_singleton()
 
     if state.mode != "ENROLLMENT" or state.enroll_student_id != student_id:
-        # Stale/duplicate result, or admin already cancelled - ignore safely.
         return jsonify({"error": "No matching enrollment currently in progress"}), 409
 
     student = Student.query.get(student_id)
@@ -146,6 +204,8 @@ def enroll_result():
         return jsonify({"error": "Student not found"}), 404
 
     if success and fingerprint_id is not None:
+        # Belt-and-braces re-check - the ID was server-assigned this time,
+        # so a clash should be very rare, but stay defensive.
         clash = Student.query.filter(
             Student.fingerprint_id == fingerprint_id,
             Student.student_id != student_id,
@@ -169,11 +229,53 @@ def enroll_result():
         state.enroll_status = "failed"
         state.enroll_message = message or "Enrollment failed on device"
 
-    # Always hand control back to attendance mode once a result comes in -
-    # keeps the device from ever getting stuck in ENROLLMENT.
     state.mode = "ATTENDANCE"
     state.enroll_student_id = None
     state.updated_at = datetime.utcnow()
     db.session.commit()
 
     return jsonify({"message": "Enrollment result recorded"}), 200
+
+
+# ===========================================================================
+# NEW - delete flow
+# ===========================================================================
+
+@api_bp.route("/delete_result", methods=["POST"])
+def delete_result():
+    """
+    ESP32 calls this once after attempting finger.deleteModel(id).
+
+    Expected JSON body:
+        { "student_id": 249001, "success": true }
+      or:
+        { "student_id": 249001, "success": false, "message": "..." }
+    """
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
+    success = bool(data.get("success"))
+    message = data.get("message", "")
+
+    state = DeviceState.get_singleton()
+
+    if state.mode != "DELETE" or state.delete_student_id != student_id:
+        return jsonify({"error": "No matching delete currently in progress"}), 409
+
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    if success:
+        student.fingerprint_id = None
+        state.delete_status = "success"
+        state.delete_message = f"Fingerprint removed for {student.name}"
+    else:
+        state.delete_status = "failed"
+        state.delete_message = message or "Delete failed on device"
+
+    state.mode = "ATTENDANCE"
+    state.delete_student_id = None
+    state.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"message": "Delete result recorded"}), 200

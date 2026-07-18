@@ -1,32 +1,23 @@
 /*
-  Fingerprint Attendance System - ESP32 Firmware (UNIFIED)
+  Fingerprint Attendance System - ESP32 Firmware (UNIFIED v2)
   ------------------------------------------------------------
   Hardware: ESP32, R307S fingerprint sensor, DS3231 RTC,
             0.91" OLED (SSD1306, I2C), Buzzer (via S8050 transistor)
 
-  WHAT CHANGED FROM THE OLD TWO-SKETCH SETUP:
-  This single sketch now replaces both the old "attendance-only" sketch
-  and the separate "enrollment-only" sketch. The device asks the server
-  which mode it should be in, every poll cycle:
-
-      GET /api/device_mode
-
-  - mode == "ATTENDANCE" (default / idle):
-        Behaves EXACTLY like the old attendance sketch - unchanged:
-          GET  /api/active_session?timetable_id=X
-          POST /api/scan   { fingerprint_id, session_id }
-
-  - mode == "ENROLLMENT":
-        Server also sends enroll_student_id (+ enroll_name). Device runs
-        the standard two-scan R307S enrollment routine, stores the new
-        template on the sensor, then reports back:
-          POST /api/enroll_result  { student_id, fingerprint_id, success }
-        The server automatically flips mode back to ATTENDANCE after
-        this - no manual re-flash or mode button needed on the device.
-
-  No admin panel / physical button on the device is needed - the mode
-  switch is entirely controlled from the Admin Panel web page
-  (Start Enrollment / Cancel Enrollment buttons).
+  CHANGES FROM v1 (unified enroll/attendance):
+  1. DELAY FIX: /api/device_mode + /api/active_session (two blocking
+     HTTPS calls per poll cycle) merged into ONE call: /api/poll
+     This removes one full TLS handshake + round-trip from every cycle.
+  2. DELETE MODE added: mode == "DELETE" -> device deletes a template
+     from the sensor via finger.deleteModel(id), reports back via
+     /api/delete_result.
+  3. FINGERPRINT ID ASSIGNMENT MOVED TO SERVER: previously the device
+     computed the next free template ID itself via
+     finger.getTemplateCount()+1 - this breaks once fingerprints are
+     deleted from the middle of the sequence (ID collisions). Now the
+     server sends enroll_fingerprint_id in the /api/poll response
+     during ENROLLMENT mode, and the device stores the template under
+     THAT id instead of computing its own.
 
   !! BEFORE FLASHING !!
   Everything under "USER CONFIG" below is a placeholder. Confirm each
@@ -56,45 +47,30 @@ const char* WIFI_SSID     = "A06";       // TODO: confirm
 const char* WIFI_PASSWORD = "88888888";   // TODO: confirm
 
 // ---- Server ----
-// PythonAnywhere free-tier apps are served over HTTPS only.
 const char* SERVER_HOST = "himasara.pythonanywhere.com"; // TODO: confirm - no trailing slash
 const bool  USE_HTTPS   = true;
 
 // ---- This device's fixed classroom/subject slot ----
-// Every physical device only ever serves ONE row in the `timetable` table.
-// Look up the correct timetable_id from the deployed DB before flashing.
 const int TIMETABLE_ID = 7;   // CONFIRMED via DB: this device serves timetable_id=7
 
 // ---- Demo mode ----
-// true  = ignore TIMETABLE_ID above, react to WHICHEVER session is
-//         currently active anywhere in the system. Handy for a single
-//         device testing several subjects during team demos without
-//         re-flashing every time you switch which lecture you're testing.
-// false = production behavior - only reacts to this device's fixed
-//         TIMETABLE_ID slot. Use this once the device is permanently
-//         assigned to one real classroom/subject.
-// !! Two lecturers should NOT start sessions for different subjects at
-// the same time while DEMO_MODE is true - the device can only follow one.
 const bool DEMO_MODE = true;
 
 // ---- Timing ----
 const unsigned long POLL_INTERVAL_MS   = 4000;   // how often to check mode / active session
 const unsigned long SCAN_COOLDOWN_MS   = 3000;   // pause after an attendance scan attempt
-const unsigned long ENROLL_STEP_TIMEOUT_MS = 15000; // give up waiting for a finger during enrollment
+const unsigned long ENROLL_STEP_TIMEOUT_MS = 15000; // give up waiting for a finger during enrollment/delete
 
 // ---- Pin mapping (ESP32 devkit, 38-pin) ----
-// R307S fingerprint sensor uses UART (TX/RX). Using ESP32 Serial2 here.
 #define FINGERPRINT_RX_PIN 16   // TODO: confirm - ESP32 pin wired to R307S TX
 #define FINGERPRINT_TX_PIN 17   // TODO: confirm - ESP32 pin wired to R307S RX
 
-// OLED + DS3231 share the I2C bus (different addresses, no conflict)
 #define I2C_SDA_PIN 21          // TODO: confirm
 #define I2C_SCL_PIN 22          // TODO: confirm
 #define OLED_WIDTH   128
-#define OLED_HEIGHT  32         // change to 64 if your module is 128x64
-#define OLED_ADDRESS 0x3C       // common default for 0.91" SSD1306 modules
+#define OLED_HEIGHT  32
+#define OLED_ADDRESS 0x3C
 
-// Buzzer driven through the S8050 transistor
 #define BUZZER_PIN 25           // TODO: confirm
 
 // ===================================================================================
@@ -105,12 +81,17 @@ Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 RTC_DS3231 rtc;
 
 unsigned long lastPollTime = 0;
-int activeSessionId = -1;   // -1 = no active session right now (ATTENDANCE mode)
+int activeSessionId = -1;
 
-// Mode state, refreshed every poll from /api/device_mode
-String currentMode = "ATTENDANCE";   // "ATTENDANCE" or "ENROLLMENT"
+// Mode state, refreshed every poll from /api/poll
+String currentMode = "ATTENDANCE";   // "ATTENDANCE" / "ENROLLMENT" / "DELETE"
+
 long enrollStudentId = -1;
 String enrollStudentName = "";
+int enrollFingerprintId = -1;        // server-assigned - NOT computed locally anymore
+
+long deleteStudentId = -1;
+int deleteFingerprintId = -1;
 
 // -----------------------------------------------------------------------------------
 void setup() {
@@ -151,21 +132,68 @@ void loop() {
   unsigned long now = millis();
   if (now - lastPollTime >= POLL_INTERVAL_MS) {
     lastPollTime = now;
-    pollDeviceMode();
-
-    // ATTENDANCE mode still needs its own session poll, exactly as before.
-    if (currentMode == "ATTENDANCE") {
-      pollActiveSession();
-    }
+    pollServer();   // single merged call - was two calls before
   }
 
   if (currentMode == "ENROLLMENT" && enrollStudentId >= 0) {
     runEnrollmentFlow();
+  } else if (currentMode == "DELETE" && deleteStudentId >= 0) {
+    runDeleteFlow();
   } else if (currentMode == "ATTENDANCE") {
     runAttendanceFlow();
   } else {
     delay(300);
   }
+}
+
+// -----------------------------------------------------------------------------------
+// ===================== MERGED POLL (delay fix) =====================
+// -----------------------------------------------------------------------------------
+// GET /api/poll?timetable_id=X  -> sets currentMode + session/enroll/delete state
+// Replaces the old separate pollDeviceMode() + pollActiveSession() calls.
+void pollServer() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST + "/api/poll";
+  if (!DEMO_MODE) {
+    url += "?timetable_id=" + String(TIMETABLE_ID);
+  }
+
+  http.begin(url);
+  int httpCode = http.GET();
+
+  if (httpCode == 200) {
+    String payload = http.getString();
+    StaticJsonDocument<384> doc;
+    DeserializationError err = deserializeJson(doc, payload);
+    if (!err) {
+      String mode = doc["mode"].as<String>();
+      currentMode = mode;
+
+      // reset all mode-specific state, then fill in what's relevant
+      enrollStudentId = -1;
+      deleteStudentId = -1;
+
+      if (mode == "ENROLLMENT") {
+        enrollStudentId = doc["enroll_student_id"].as<long>();
+        enrollStudentName = doc["enroll_name"].isNull() ? "" : doc["enroll_name"].as<String>();
+        enrollFingerprintId = doc["enroll_fingerprint_id"].as<int>();
+      } else if (mode == "DELETE") {
+        deleteStudentId = doc["delete_student_id"].as<long>();
+        deleteFingerprintId = doc["delete_fingerprint_id"].as<int>();
+      } else {
+        // ATTENDANCE
+        activeSessionId = doc["session_id"].isNull() ? -1 : doc["session_id"].as<int>();
+      }
+    } else {
+      Serial.println("JSON parse error on /api/poll response");
+    }
+  } else {
+    Serial.printf("/api/poll request failed, code=%d\n", httpCode);
+  }
+
+  http.end();
 }
 
 // -----------------------------------------------------------------------------------
@@ -185,50 +213,12 @@ void runAttendanceFlow() {
   }
 }
 
-// GET /api/active_session?timetable_id=X  (param omitted when DEMO_MODE)
-void pollActiveSession() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  HTTPClient http;
-  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST + "/api/active_session";
-  if (!DEMO_MODE) {
-    url += "?timetable_id=" + String(TIMETABLE_ID);
-  }
-
-  http.begin(url);
-  int httpCode = http.GET();
-
-  if (httpCode == 200) {
-    String payload = http.getString();
-    StaticJsonDocument<256> doc;
-    DeserializationError err = deserializeJson(doc, payload);
-    if (!err) {
-      if (doc["session_id"].isNull()) {
-        activeSessionId = -1;
-      } else {
-        activeSessionId = doc["session_id"].as<int>();
-      }
-    } else {
-      Serial.println("JSON parse error on active_session response");
-    }
-  } else {
-    Serial.printf("active_session request failed, code=%d\n", httpCode);
-  }
-
-  http.end();
-}
-
-// Returns the matched fingerprint template ID, or -1 if no match / no finger present.
 int tryReadFingerprint() {
   int p = finger.getImage();
-  if (p != FINGERPRINT_OK) {
-    return -1;   // no finger on sensor, or read error - just try again next loop
-  }
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.image2Tz();
-  if (p != FINGERPRINT_OK) {
-    return -1;
-  }
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.fingerFastSearch();
   if (p != FINGERPRINT_OK) {
@@ -237,12 +227,9 @@ int tryReadFingerprint() {
     return -1;
   }
 
-  // finger.fingerID is the template ID stored on the sensor,
-  // matching Student.fingerprint_id in the database.
   return finger.fingerID;
 }
 
-// POST /api/scan  { "fingerprint_id": X, "session_id": Y }
 void submitScan(int fingerprintId, int sessionId) {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -273,88 +260,36 @@ void submitScan(int fingerprintId, int sessionId) {
 }
 
 // -----------------------------------------------------------------------------------
-// ===================== ENROLLMENT MODE (new) =====================
+// ===================== ENROLLMENT MODE =====================
 // -----------------------------------------------------------------------------------
-
-// GET /api/device_mode -> sets currentMode / enrollStudentId / enrollStudentName
-void pollDeviceMode() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  HTTPClient http;
-  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST + "/api/device_mode";
-  http.begin(url);
-  int httpCode = http.GET();
-
-  if (httpCode == 200) {
-    String payload = http.getString();
-    StaticJsonDocument<256> doc;
-    DeserializationError err = deserializeJson(doc, payload);
-    if (!err) {
-      String mode = doc["mode"].as<String>();
-      if (mode == "ENROLLMENT") {
-        currentMode = "ENROLLMENT";
-        enrollStudentId = doc["enroll_student_id"].as<long>();
-        enrollStudentName = doc["enroll_name"].isNull() ? "" : doc["enroll_name"].as<String>();
-      } else {
-        currentMode = "ATTENDANCE";
-        enrollStudentId = -1;
-        enrollStudentName = "";
-      }
-    } else {
-      Serial.println("JSON parse error on device_mode response");
-    }
-  } else {
-    Serial.printf("device_mode request failed, code=%d\n", httpCode);
-  }
-
-  http.end();
-}
-
-// Runs one full enrollment attempt (blocking - this is fine, since the
-// admin is actively watching the Admin Panel page waiting for a result).
 void runEnrollmentFlow() {
   showMessage("Enrollment Mode", enrollStudentName.length() ? enrollStudentName : String(enrollStudentId));
 
-  int newId = getNextFreeTemplateId();
-  if (newId < 0) {
-    reportEnrollResult(false, -1, "Could not read sensor template count");
+  if (enrollFingerprintId < 1) {
+    reportEnrollResult(false, -1, "Server did not provide a valid fingerprint_id");
     return;
   }
 
-  bool success = enrollFingerprintAtId(newId);
+  bool success = enrollFingerprintAtId(enrollFingerprintId);
 
   if (success) {
-    showMessage("Enrolled OK", "id=" + String(newId));
+    showMessage("Enrolled OK", "id=" + String(enrollFingerprintId));
     beep(300);
-    reportEnrollResult(true, newId, "");
+    reportEnrollResult(true, enrollFingerprintId, "");
   } else {
     showMessage("Enroll failed", "Try again");
     beep(600);
     reportEnrollResult(false, -1, "Enrollment failed on device");
   }
 
-  // pollDeviceMode() on the next cycle will pick up the server's switch
-  // back to ATTENDANCE mode automatically - no local state to reset here
-  // beyond what reportEnrollResult / the next poll already handles.
   delay(1000);
 }
 
-// Uses the sensor's own template count as the next free slot ID.
-// NOTE: assumes templates are only ever added sequentially through this
-// system (never deleted directly on the sensor) - good enough for this
-// project's scope. IDs start at 1.
-int getNextFreeTemplateId() {
-  if (finger.getTemplateCount() != FINGERPRINT_OK) {
-    return -1;
-  }
-  return finger.templateCount + 1;
-}
-
 // Standard Adafruit_Fingerprint two-scan enrollment sequence.
+// `id` is now always server-assigned (see enrollFingerprintId above).
 bool enrollFingerprintAtId(int id) {
   int p = -1;
 
-  // ---- First scan ----
   showMessage("Place finger", "(1st scan)");
   unsigned long start = millis();
   while (p != FINGERPRINT_OK) {
@@ -370,7 +305,6 @@ bool enrollFingerprintAtId(int id) {
   p = finger.image2Tz(1);
   if (p != FINGERPRINT_OK) return false;
 
-  // ---- Require finger removal before second scan ----
   showMessage("Remove finger", "");
   delay(1500);
   p = 0;
@@ -381,7 +315,6 @@ bool enrollFingerprintAtId(int id) {
     delay(100);
   }
 
-  // ---- Second scan ----
   showMessage("Place finger", "(2nd scan)");
   p = -1;
   start = millis();
@@ -398,9 +331,8 @@ bool enrollFingerprintAtId(int id) {
   p = finger.image2Tz(2);
   if (p != FINGERPRINT_OK) return false;
 
-  // ---- Combine into a model and store it ----
   p = finger.createModel();
-  if (p != FINGERPRINT_OK) return false;   // e.g. FINGERPRINT_ENROLLMISMATCH - two scans didn't match
+  if (p != FINGERPRINT_OK) return false;
 
   p = finger.storeModel(id);
   if (p != FINGERPRINT_OK) return false;
@@ -408,7 +340,6 @@ bool enrollFingerprintAtId(int id) {
   return true;
 }
 
-// POST /api/enroll_result  { student_id, fingerprint_id, success, message }
 void reportEnrollResult(bool success, int fingerprintId, const String& message) {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -432,6 +363,59 @@ void reportEnrollResult(bool success, int fingerprintId, const String& message) 
   int httpCode = http.POST(requestBody);
   if (httpCode != 200) {
     Serial.printf("enroll_result POST failed, code=%d, body=%s\n", httpCode, http.getString().c_str());
+  }
+
+  http.end();
+}
+
+// -----------------------------------------------------------------------------------
+// ===================== DELETE MODE (new) =====================
+// -----------------------------------------------------------------------------------
+void runDeleteFlow() {
+  showMessage("Delete Mode", "id=" + String(deleteFingerprintId));
+
+  if (deleteFingerprintId < 1) {
+    reportDeleteResult(false, "Server did not provide a valid fingerprint_id");
+    return;
+  }
+
+  int p = finger.deleteModel(deleteFingerprintId);
+  bool success = (p == FINGERPRINT_OK);
+
+  if (success) {
+    showMessage("Deleted OK", "id=" + String(deleteFingerprintId));
+    beep(300);
+    reportDeleteResult(true, "");
+  } else {
+    showMessage("Delete failed", "code " + String(p));
+    beep(600);
+    reportDeleteResult(false, "finger.deleteModel failed, code=" + String(p));
+  }
+
+  delay(1000);
+}
+
+// POST /api/delete_result  { student_id, success, message }
+void reportDeleteResult(bool success, const String& message) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  String url = String(USE_HTTPS ? "https://" : "http://") + SERVER_HOST + "/api/delete_result";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<192> reqDoc;
+  reqDoc["student_id"] = deleteStudentId;
+  reqDoc["success"] = success;
+  if (message.length()) {
+    reqDoc["message"] = message;
+  }
+  String requestBody;
+  serializeJson(reqDoc, requestBody);
+
+  int httpCode = http.POST(requestBody);
+  if (httpCode != 200) {
+    Serial.printf("delete_result POST failed, code=%d, body=%s\n", httpCode, http.getString().c_str());
   }
 
   http.end();
