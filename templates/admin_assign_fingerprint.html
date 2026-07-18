@@ -46,7 +46,7 @@
         color: #555;
     }
 
-    /* --- device status + live enrollment table --- */
+    /* --- device status + live enrollment/delete table --- */
     .status-card {
         background: #fff;
         border: 1px solid #e2e2e2;
@@ -103,6 +103,21 @@
         background: #ccc;
         cursor: not-allowed;
     }
+    .delete-btn {
+        padding: 0.45rem 1rem;
+        background: #fff;
+        color: #b00020;
+        border: 1px solid #b00020;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .delete-btn:disabled {
+        color: #ccc;
+        border-color: #ccc;
+        cursor: not-allowed;
+    }
 
     .section-title {
         font-size: 1rem;
@@ -113,17 +128,25 @@
 
 <h1>Assign Fingerprint</h1>
 
-<!-- ===================== Device / Enrollment Status ===================== -->
+<!-- ===================== Device / Enrollment / Delete Status ===================== -->
 <div class="status-card">
     <p>
         {% if device_state.mode == "ENROLLMENT" %}
             🟡 Waiting for fingerprint scan
             {% if device_state.student %}for <strong>{{ device_state.student.name }}</strong> ({{ device_state.enroll_student_id }}){% endif %}
             ... (this page refreshes automatically)
+        {% elif device_state.mode == "DELETE" %}
+            🟠 Removing fingerprint from sensor
+            {% if device_state.delete_target_student %}for <strong>{{ device_state.delete_target_student.name }}</strong> ({{ device_state.delete_student_id }}){% endif %}
+            ... (this page refreshes automatically)
         {% elif device_state.enroll_status == "success" %}
             ✅ {{ device_state.enroll_message or "Enrollment successful!" }}
         {% elif device_state.enroll_status == "failed" %}
             ❌ {{ device_state.enroll_message or "Enrollment failed. Try again." }}
+        {% elif device_state.delete_status == "success" %}
+            ✅ {{ device_state.delete_message or "Fingerprint removed successfully!" }}
+        {% elif device_state.delete_status == "failed" %}
+            ❌ {{ device_state.delete_message or "Delete failed. Try again." }}
         {% else %}
             🟢 Device is in Attendance mode (idle)
         {% endif %}
@@ -133,11 +156,14 @@
     <form method="POST" action="{{ url_for('admin.cancel_enrollment') }}" style="display:inline;">
         <button type="submit" class="cancel-btn">Cancel Enrollment</button>
     </form>
+    {% elif device_state.mode == "DELETE" %}
+    <form method="POST" action="{{ url_for('admin.cancel_delete_fingerprint') }}" style="display:inline;">
+        <button type="submit" class="cancel-btn">Cancel Delete</button>
+    </form>
     {% endif %}
 </div>
 
 {% if students %}
-
 <!-- ===================== Live hardware enrollment ===================== -->
 <p class="section-title">Students Without a Fingerprint - Start Enrollment</p>
 <table class="enroll-table">
@@ -155,7 +181,7 @@
             <td>{{ s.name }}</td>
             <td>
                 <form method="POST" action="{{ url_for('admin.start_enrollment', student_id=s.student_id) }}">
-                    <button type="submit" class="enroll-btn" {% if device_state.mode == "ENROLLMENT" %}disabled{% endif %}>
+                    <button type="submit" class="enroll-btn" {% if device_state.mode != "ATTENDANCE" %}disabled{% endif %}>
                         Start Enrollment
                     </button>
                 </form>
@@ -169,8 +195,53 @@
     device sensor. This page refreshes automatically while waiting, and stops
     refreshing once the device reports success or failure.
 </div>
+{% endif %}
+
+{% if enrolled_students %}
+<!-- ===================== Live hardware delete ===================== -->
+<p class="section-title">Students With a Fingerprint - Remove Fingerprint</p>
+<table class="enroll-table">
+    <thead>
+        <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Fingerprint ID</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in enrolled_students %}
+        <tr>
+            <td>{{ s.student_id }}</td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.fingerprint_id }}</td>
+            <td>
+                <form method="POST" action="{{ url_for('admin.start_delete_fingerprint', student_id=s.student_id) }}"
+                      onsubmit="return confirm('{{ s.name }} ගේ fingerprint එක sensor එකෙන් සහ database එකෙන් ම ඉවත් කරන්නද?');">
+                    <button type="submit" class="delete-btn" {% if device_state.mode != "ATTENDANCE" %}disabled{% endif %}>
+                        Remove Fingerprint
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="hint" style="margin-bottom:2rem;">
+    "Remove Fingerprint" click කලාම device එක sensor එකෙන්ම ඒ template එක delete කරලා,
+    database එකේ student ගේ fingerprint_id එකත් හිස් කරනවා. මේකෙන් පස්සේ ඒ student ට
+    අලුතෙන් fingerprint එකක් "Start Enrollment" එකෙන් enroll කරගන්න පුළුවන්.
+</div>
+{% endif %}
+
+{% if not students and not enrolled_students %}
+<div class="empty-state">
+    Database එකේ students කිසිවෙක් නෑ.
+</div>
+{% endif %}
 
 <!-- ===================== Manual fallback (original form) ===================== -->
+{% if students %}
 <p class="section-title">Manual Assignment (fallback)</p>
 <div class="form-card">
     <form method="POST">
@@ -194,21 +265,16 @@
         <button type="submit" class="submit-btn">Assign Fingerprint</button>
     </form>
 </div>
-{% else %}
-<div class="empty-state">
-    ✅ සියලුම students ලාට fingerprint IDs assign වෙලා ඉවරයි.
-    Fingerprint නැති students කෙනෙක්වත් නෑ.
-</div>
 {% endif %}
 
-{% if device_state.mode == "ENROLLMENT" %}
+{% if device_state.mode == "ENROLLMENT" or device_state.mode == "DELETE" %}
 <script>
-    // Enrollment is in progress on the device - keep refreshing the whole
-    // page every 3 seconds until the server reports the device is back
-    // in ATTENDANCE mode (success or failure recorded via /api/enroll_result).
-    // This condition is decided server-side (Jinja), so once mode flips
-    // back to ATTENDANCE, this script block is no longer rendered at all
-    // and the auto-refresh stops on its own.
+    // Enrollment or Delete is in progress on the device - keep refreshing the
+    // whole page every 3 seconds until the server reports the device is back
+    // in ATTENDANCE mode (result recorded via /api/enroll_result or
+    // /api/delete_result). This condition is decided server-side (Jinja), so
+    // once mode flips back to ATTENDANCE, this script block is no longer
+    // rendered at all and the auto-refresh stops on its own.
     setTimeout(function () {
         window.location.reload();
     }, 3000);
