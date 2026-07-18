@@ -15,6 +15,9 @@ Routes:
     POST /admin/start_enrollment/<student_id>  -> switch device to ENROLLMENT mode
     POST /admin/cancel_enrollment              -> switch device back to ATTENDANCE mode
     GET  /admin/enrollment_status              -> JSON, polled by the page's JS
+
+    POST /admin/start_delete_fingerprint/<student_id>  -> switch device to DELETE mode
+    POST /admin/cancel_delete_fingerprint              -> switch device back to ATTENDANCE mode
 """
 from datetime import datetime
 from functools import wraps
@@ -132,20 +135,29 @@ def add_student():
 @admin_required
 def assign_fingerprint():
     """
-    Attach a hardware fingerprint template ID to an existing student
-    record. Two ways to do this now:
+    Manage fingerprint templates for students. Three things happen on
+    this one page now:
 
-      1. Live hardware enrollment (preferred) - click "Start Enrollment"
-         next to a student, which flips the device into ENROLLMENT mode
-         (see start_enrollment below). The page polls /admin/enrollment_status
-         and shows the result automatically once the ESP32 reports back.
+      1. Live hardware ENROLLMENT (preferred) - click "Start Enrollment"
+         next to a student without a fingerprint. Flips the device into
+         ENROLLMENT mode (see start_enrollment below). The page
+         auto-refreshes and shows the result once the ESP32 reports back.
 
-      2. Manual entry (fallback) - if you already know the fingerprint_id
-         (e.g. captured separately, or hardware enrollment failed), the
-         original manual form below still works exactly as before.
+      2. Live hardware DELETE (new) - click "Remove Fingerprint" next to
+         a student who already has one. Flips the device into DELETE
+         mode (see start_delete_fingerprint below). Removes the template
+         from the R307S sensor itself AND clears fingerprint_id in the DB.
+
+      3. Manual entry (fallback) - if you already know the fingerprint_id,
+         the original manual form below still works exactly as before.
     """
     unenrolled = (
         Student.query.filter(Student.fingerprint_id.is_(None))
+        .order_by(Student.student_id)
+        .all()
+    )
+    enrolled = (
+        Student.query.filter(Student.fingerprint_id.isnot(None))
         .order_by(Student.student_id)
         .all()
     )
@@ -181,6 +193,7 @@ def assign_fingerprint():
     return render_template(
         "admin_assign_fingerprint.html",
         students=unenrolled,
+        enrolled_students=enrolled,
         device_state=device_state,
     )
 
@@ -189,8 +202,8 @@ def assign_fingerprint():
 @admin_required
 def start_enrollment(student_id):
     """Switches the device into ENROLLMENT mode for one specific student.
-    The ESP32 picks this up on its next /api/device_mode poll (within a
-    few seconds) and starts asking for a fingerprint scan."""
+    The ESP32 picks this up on its next /api/poll (within a few seconds)
+    and starts asking for a fingerprint scan."""
     student = Student.query.get(student_id)
     if not student:
         flash("Student not found.")
@@ -240,6 +253,52 @@ def enrollment_status():
         "enroll_status": state.enroll_status,
         "enroll_message": state.enroll_message,
     })
+
+
+# ---------------------------------------------------------------------------
+# NEW - Delete fingerprint (mirrors the enrollment routes above)
+# ---------------------------------------------------------------------------
+@admin_bp.route("/start_delete_fingerprint/<int:student_id>", methods=["POST"])
+@admin_required
+def start_delete_fingerprint(student_id):
+    """Switches the device into DELETE mode for one specific student's
+    fingerprint. The ESP32 picks this up on its next /api/poll and
+    removes the matching template from the R307S sensor itself."""
+    student = Student.query.get(student_id)
+    if not student:
+        flash("Student not found.")
+        return redirect(url_for("admin.assign_fingerprint"))
+
+    if student.fingerprint_id is None:
+        flash(f"{student.name} has no fingerprint enrolled.")
+        return redirect(url_for("admin.assign_fingerprint"))
+
+    state = DeviceState.get_singleton()
+    state.mode = "DELETE"
+    state.delete_student_id = student.student_id
+    state.delete_status = "waiting"
+    state.delete_message = None
+    state.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    flash(f"Delete mode started for {student.name}'s fingerprint. Device will remove it from the sensor now.")
+    return redirect(url_for("admin.assign_fingerprint"))
+
+
+@admin_bp.route("/cancel_delete_fingerprint", methods=["POST"])
+@admin_required
+def cancel_delete_fingerprint():
+    """Manually abort a stuck/unwanted delete and hand the device back
+    to normal ATTENDANCE mode."""
+    state = DeviceState.get_singleton()
+    state.mode = "ATTENDANCE"
+    state.delete_student_id = None
+    state.delete_status = "idle"
+    state.delete_message = None
+    state.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Delete mode cancelled - device is back in Attendance mode.")
+    return redirect(url_for("admin.assign_fingerprint"))
 
 
 # ---------------------------------------------------------------------------
