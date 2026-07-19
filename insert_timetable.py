@@ -130,6 +130,20 @@ TIMETABLE = [
         "start_time": "12:00",
         "end_time": "14:00",
     },
+    {
+        "subject_code": "ET001",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Sunday",
+        "start_time": "09:00",
+        "end_time": "11:00",
+    },
+    {
+        "subject_code": "ET003",
+        "lecturer_username": "DidulaAdmin",
+        "day_of_week": "Sunday",
+        "start_time": "12:00",
+        "end_time": "14:00",
+    },
     # ... ඔයාගේ timetable rows මෙතනට add කරන්න
 ]
 
