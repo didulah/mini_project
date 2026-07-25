@@ -122,7 +122,6 @@ The app will be available at `http://127.0.0.1:5000`.
 
 ## 📸 Screenshots
 
-_Add screenshots here — see the "How to add screenshots" section below._
 
 | Login Page | Admin Dashboard |
 |---|---|
@@ -136,8 +135,6 @@ _Add screenshots here — see the "How to add screenshots" section below._
 
 ## 🔮 Possible Future Improvements
 
-- Fingerprint delete/re-enrollment flow (in progress on a feature branch)
-- Merged single-poll API endpoint to reduce ESP32 network latency
 - Mobile-responsive admin dashboard
 
 ---
