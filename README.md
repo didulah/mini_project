@@ -1,134 +1,158 @@
 # Fingerprint-Based Student Attendance Management System
 
-A hardware + web application project combining an ESP32-based fingerprint
-device with a Flask/SQLite attendance system, built for Wayamba University
-of Sri Lanka (Faculty of Technology, ENAC 1X0 module).
+A fully working attendance system that uses a fingerprint sensor and an ESP32 microcontroller to automatically record student attendance in real time, integrated with a Flask web application and SQLite database. The project combines an **Embedded System** with a **Web Application** to eliminate manual, error-prone attendance methods.
 
-- **Live app:** https://himasara.pythonanywhere.com
-- **Repo:** https://github.com/didulah/mini_project
+🔗 **Live Demo:** [himasara.pythonanywhere.com](https://himasara.pythonanywhere.com)
+📦 **Repository:** [github.com/didulah/mini_project](https://github.com/didulah/mini_project)
+🎥 **Demo Video:** _[\[add your video link here\]](https://drive.google.com/file/d/1rDYC6_LYCo1P7QrrZcJGnDFMTPGzGINM/view?usp=sharing)_
 
----
-
-## What it does
-
-- Students mark attendance by placing a finger on an R307S fingerprint
-  sensor connected to an ESP32.
-- Lecturers log in to the web app, pick today's lecture from their
-  timetable, and start a live attendance session.
-- Live attendance view auto-refreshes as students scan in.
-- Lecturers can generate printable attendance reports, and look up a
-  student's monthly history (lectures held, lectures absent, attendance
-  percentage, eligibility at the 80% threshold).
-- False-absent corrections and excuse handling (medical / sport / other)
-  update past records with a full audit trail.
-- Admin Panel: manage students, lecturers, and fingerprint templates
-  (enroll and remove, both via live hardware or manual entry).
+> ✅ **Status:** Completed as a university mini project (ENAC 1X0, Wayamba University of Sri Lanka) — evaluated and passed.
 
 ---
 
-## Hardware
+## 📌 Why This Project (Motivation)
 
-- ESP32 (38-pin devkit)
-- R307S fingerprint sensor (UART)
-- DS3231 RTC module (I2C)
-- 0.91" SSD1306 OLED display (I2C, shares bus with RTC)
-- Buzzer (driven via S8050 transistor)
-- 3.7V battery + charging module
+Traditional attendance marking methods (paper registers, roll calls, manual sign sheets) come with several problems this project solves:
 
-## Software stack
-
-- **Backend:** Flask (application factory pattern, blueprints: `auth`,
-  `attendance`, `api`, `admin`), SQLAlchemy, SQLite
-- **Firmware:** Arduino/ESP32 (C++), libraries: `Adafruit_Fingerprint`,
-  `Adafruit SSD1306`, `ArduinoJson`, `RTClib`, `WiFiClientSecure`
-- **Deployment:** PythonAnywhere (free tier)
+- Eliminates **proxy attendance (buddy punching)** — fingerprint can't be shared
+- Reduces lecture time spent on manually marking attendance
+- Removes manual data-entry errors
+- Maintains a **centralized, searchable** historical attendance record
+- Automatically calculates **attendance percentage** and **80% eligibility status**
 
 ---
 
-## Firmware operating modes
+## 🛠️ Hardware Components
 
-A single unified `main.ino` sketch drives the device through three modes,
-controlled entirely from the Admin Panel (no re-flashing needed to switch):
-
-| Mode | Trigger | What the device does |
-|---|---|---|
-| `ATTENDANCE` (default) | idle | Polls for an active session, scans fingerprints, POSTs `/api/scan` |
-| `ENROLLMENT` | Admin clicks "Start Enrollment" for a student | Runs a two-scan enrollment routine, stores the template under a **server-assigned** fingerprint ID, POSTs `/api/enroll_result` |
-| `DELETE` | Admin clicks "Remove Fingerprint" for a student | Deletes the matching template from the sensor via `finger.deleteModel()`, POSTs `/api/delete_result` |
-
-The device polls a single merged endpoint, `GET /api/poll`, once per cycle
-to discover its current mode and any relevant session/enrollment/delete
-data - this replaced two separate HTTPS calls to cut ESP32 scan latency.
+| Component                      | Purpose                                                   |
+| ------------------------------- | ---------------------------------------------------------- |
+| Fingerprint Sensor — R307S      | Captures and matches student fingerprints                  |
+| ESP32 (38-pin)                  | Main controller — handles sensor, display, Wi-Fi, and API calls |
+| RTC Module — DS3231 (HW-084)    | Provides accurate timestamps, independent of Wi-Fi/NTP     |
+| OLED Display 0.91" (SSD1306, I2C)| Displays live system status and user feedback              |
+| Buzzer (via S8050 transistor)   | Audio confirmation for scan success/failure                |
+| Charging Module + 3.7V Battery  | Portable power supply                                      |
 
 ---
 
-## Project structure (high level)
+## 💻 Software Stack
+
+- **Backend:** Flask (Python) — application factory pattern with Blueprints (`auth`, `attendance`, `api`, `admin`)
+- **Database:** SQLite + SQLAlchemy ORM
+- **Frontend:** HTML / CSS / JS (Jinja2 templates), custom design system (`style.css`)
+- **Firmware:** Arduino / C++ (ESP32) — unified firmware supporting ATTENDANCE and ENROLLMENT modes
+- **Deployment:** PythonAnywhere (Git-based deployment workflow)
+
+---
+
+## ✨ Core Features
+
+- ✅ Lecturer login (username/password) with role-based access
+- ✅ Lecturer selects the day's timetable slot and starts an attendance session
+- ✅ ESP32 → Flask API — real-time fingerprint-based attendance marking
+- ✅ Live attendance view with auto-refresh during an active session
+- ✅ End Session route to close out attendance taking
+- ✅ Full attendance report for all students, with print-friendly export
+- ✅ Student ID-based historical attendance report (monthly), showing:
+  - Total lectures held
+  - Number of absences
+  - Attendance on a specific day
+  - Attendance percentage and eligibility status (≥80% = eligible)
+- ✅ **Update Attendance** — correct false-absent records, with a full audit trail
+- ✅ **Update Attendance** — re-mark attendance for approved late excuses (medical, sports, other)
+- ✅ Auto-enrollment of all students into all subjects (bidirectional)
+- ✅ Local time display (UTC+5:30) throughout the app
+- ✅ `DEMO_MODE` firmware flag for safe testing without affecting live timetable data
+- ✅ Admin panel for student, lecturer, and timetable management
+- ✅ Live deployment on PythonAnywhere
+
+---
+
+## 📁 Project Structure
 
 ```
 mini_project/
-├── app.py                  # Flask app factory
-├── extensions.py           # db (SQLAlchemy) instance
-├── models.py                # Student, Lecturer, Subject, Enrollment,
-│                            # Timetable, LectureSession, AttendanceRecord,
-│                            # DeviceState
-├── routes/
-│   ├── auth.py              # lecturer login/logout
-│   ├── attendance.py        # dashboard, session start/end, reports
-│   ├── admin.py              # admin panel (students, lecturers, fingerprints)
-│   └── api.py                # ESP32-facing endpoints (poll, scan, enroll/delete results)
-├── templates/                # Jinja templates
-├── static/                   # style.css (design tokens, shared components)
-├── firmware/
-│   └── main.ino              # unified ESP32 sketch
-├── init_db.py                 # create tables + first admin account
-├── insert_timetable.py        # idempotent subjects/timetable seeding script
-└── database/
-    └── attendance.db          # SQLite file (gitignored, persistent on server)
+├── app.py                 # Flask application factory
+├── config.py               # App configuration
+├── extensions.py           # Flask extensions (db, etc.)
+├── models.py                # SQLAlchemy database models
+├── requirements.txt
+├── schema.sql                # Database schema reference
+├── routes/                   # Blueprints
+│   ├── auth.py
+│   ├── attendance.py
+│   ├── api.py
+│   └── admin.py
+├── templates/                # Jinja2 HTML templates
+├── static/
+│   └── css/                    # style.css design system
+├── database/
+│   └── attendance.db          # SQLite DB (gitignored, persistent on server)
+├── firmware/                   # ESP32 Arduino code
+│   └── main.ino
+├── PROJECT_LOG.md              # Running project context/decision log
+└── README.md
 ```
 
 ---
 
-## Local development workflow
+## 🚀 Setup & Installation
 
-1. Edit code in VSCode.
-2. `git push` to a feature branch (e.g. `branch2`) - `main` is always kept
-   as the last known-good production state.
-3. On PythonAnywhere: `git pull`, then the Web tab's **Reload** button.
-4. Never edit files directly on the server.
+```bash
+git clone https://github.com/didulah/mini_project.git
+cd mini_project
+python -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python init_db.py             # Creates the database and tables
+python insert_timetable.py    # Loads timetable data
+python app.py
+```
 
-### Database schema changes
-`db.create_all()` does **not** alter existing tables. Any schema change
-against a database that already has real data needs a targeted
-`ALTER TABLE ...` via the `sqlite3` shell (after taking a file-copy
-backup) - **not** a full `init_db.py` re-run, which is only safe against
-an empty/throwaway database.
+The app will be available at `http://127.0.0.1:5000`.
 
-### Timetable changes
-Edit the `SUBJECTS` / `TIMETABLE` lists in `insert_timetable.py` locally,
-commit, push, then run `python insert_timetable.py` on the server. The
-script is idempotent (skips subjects/rows that already exist) but its
-duplicate check for timetable rows only considers
-`subject + lecturer + day_of_week + start_time` - changing `end_time`
-alone on an existing row will be silently skipped, not updated.
+### Firmware Setup
 
----
-
-## Known limitations
-
-- `init_db.py`'s "create first admin if none exists" check currently has
-  a bug that can throw a `UNIQUE constraint failed: lecturers.username`
-  error if run against a DB that already has an admin account. Fix
-  pending - use the manual `ALTER TABLE` approach for schema changes in
-  the meantime.
-- `DEMO_MODE` in `main.ino` must be set to `false` with a confirmed
-  `TIMETABLE_ID` before any real single-classroom deployment.
+1. Open `firmware/main.ino` in Arduino IDE
+2. Install required libraries: `Adafruit_Fingerprint`, `Adafruit SSD1306`, `ArduinoJson`, `RTClib`, `WiFiClientSecure`
+3. Update Wi-Fi credentials and server URL in the firmware config
+4. Flash to ESP32 and wire according to the hardware table above (OLED + RTC share I2C on GPIO21/22)
 
 ---
 
-## Status
+## 📸 Screenshots
 
-Core attendance flow (unified ATTENDANCE + ENROLLMENT firmware, admin
-panel, live attendance, reports, false-absent correction) is complete and
-deployed on `main`. Fingerprint DELETE flow and a scan-delay fix (merged
-polling endpoint) are in progress on `branch2`, pending hardware testing
-before merge.
+_Add screenshots here — see the "How to add screenshots" section below._
+
+| Login Page | Admin Dashboard |
+|---|---|
+| ![Login](screenshots/login.png) | ![Dashboard](screenshots/dashboard.png) |
+
+| Live Attendance View | Student Report |
+|---|---|
+| ![Live Attendance](screenshots/live_attendance.png) | ![Report](screenshots/report.png) |
+
+---
+
+## 🔮 Possible Future Improvements
+
+- Fingerprint delete/re-enrollment flow (in progress on a feature branch)
+- Merged single-poll API endpoint to reduce ESP32 network latency
+- Mobile-responsive admin dashboard
+
+---
+
+## 👤 Author
+
+**Didula Gunaweera**
+Undergraduate, Wayamba University of Sri Lanka
+Contributed the full software side: Flask web application, database design, and ESP32–server communication logic.
+
+🔗 [LinkedIn](https://www.linkedin.com/in/didula-gunaweera-3aa7a1381)
+🔗 [GitHub](https://github.com/didulah)
+
+---
+
+## 🙏 Acknowledgements
+
+Developed as part of the ENAC 1X0 mini project module, Faculty of Technology, Wayamba University of Sri Lanka.
