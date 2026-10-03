@@ -4,7 +4,7 @@ A fully working attendance system that uses a fingerprint sensor and an ESP32 mi
 
 🔗 **Live Demo:** [himasara.pythonanywhere.com](https://himasara.pythonanywhere.com)
 📦 **Repository:** [github.com/didulah/mini_project](https://github.com/didulah/mini_project)
-🎥 **Demo Video:** _[\[drive.google.com\]](https://drive.google.com/file/d/1rDYC6_LYCo1P7QrrZcJGnDFMTPGzGINM/view?usp=sharing)_
+🎥 **Demo Video:** _[\[Watch the demo video\]](https://drive.google.com/file/d/1rDYC6_LYCo1P7QrrZcJGnDFMTPGzGINM/view?usp=sharing)_
 
 > ✅ **Status:** Completed as a university mini project (ENAC 1X0, Wayamba University of Sri Lanka) — evaluated and passed.
 
