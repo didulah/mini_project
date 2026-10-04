@@ -1,10 +1,8 @@
 # Fingerprint-Based Student Attendance Management System
 
-A fully working attendance system that uses a fingerprint sensor and an ESP32 microcontroller to automatically record student attendance in real time, integrated with a Flask web application and SQLite database. The project combines an **Embedded System** with a **Web Application** to eliminate manual, error-prone attendance methods.
+A fully working attendance system that uses a fingerprint sensor and an ESP32 microcontroller to automatically record student attendance in real time, integrated with a Flask web application and SQLite database. The project combines an **Embedded System** with a **Web Application** to reduce manual, error-prone attendance methods.
 
-🔗 **Live Demo:** [himasara.pythonanywhere.com](https://himasara.pythonanywhere.com)
 📦 **Repository:** [github.com/didulah/mini_project](https://github.com/didulah/mini_project)
-🎥 **Demo Video:** _[\[Watch the demo video\]](https://drive.google.com/file/d/1rDYC6_LYCo1P7QrrZcJGnDFMTPGzGINM/view?usp=sharing)_
 
 > ✅ **Status:** Completed as a university mini project (ENAC 1X0, Wayamba University of Sri Lanka) — evaluated and passed.
 
@@ -14,7 +12,7 @@ A fully working attendance system that uses a fingerprint sensor and an ESP32 mi
 
 Traditional attendance marking methods (paper registers, roll calls, manual sign sheets) come with several problems this project solves:
 
-- Eliminates **proxy attendance (buddy punching)** — fingerprint can't be shared
+- Reduces **proxy attendance (buddy punching)** — a fingerprint can't be shared
 - Reduces lecture time spent on manually marking attendance
 - Removes manual data-entry errors
 - Maintains a **centralized, searchable** historical attendance record
@@ -24,14 +22,14 @@ Traditional attendance marking methods (paper registers, roll calls, manual sign
 
 ## 🛠️ Hardware Components
 
-| Component                      | Purpose                                                   |
-| ------------------------------- | ---------------------------------------------------------- |
-| Fingerprint Sensor — R307S      | Captures and matches student fingerprints                  |
-| ESP32 (38-pin)                  | Main controller — handles sensor, display, Wi-Fi, and API calls |
-| RTC Module — DS3231 (HW-084)    | Provides accurate timestamps, independent of Wi-Fi/NTP     |
-| OLED Display 0.91" (SSD1306, I2C)| Displays live system status and user feedback              |
-| Buzzer (via S8050 transistor)   | Audio confirmation for scan success/failure                |
-| Charging Module + 3.7V Battery  | Portable power supply                                      |
+| Component                        | Purpose                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| Fingerprint Sensor — R307S       | Captures and matches student fingerprints                       |
+| ESP32 (38-pin)                   | Main controller — handles sensor, display, Wi-Fi, and API calls |
+| RTC Module — DS3231 (HW-084)     | Provides accurate timestamps, independent of Wi-Fi/NTP          |
+| OLED Display 0.91" (SSD1306, I2C)| Displays live system status and user feedback                   |
+| Buzzer (via S8050 transistor)    | Audio confirmation for scan success/failure                     |
+| Charging Module + 3.7V Battery   | Portable power supply                                           |
 
 ---
 
@@ -41,7 +39,7 @@ Traditional attendance marking methods (paper registers, roll calls, manual sign
 - **Database:** SQLite + SQLAlchemy ORM
 - **Frontend:** HTML / CSS / JS (Jinja2 templates), custom design system (`style.css`)
 - **Firmware:** Arduino / C++ (ESP32) — unified firmware supporting ATTENDANCE and ENROLLMENT modes
-- **Deployment:** PythonAnywhere (Git-based deployment workflow)
+- **Deployment:** PythonAnywhere (Git-based deployment workflow, used during evaluation)
 
 ---
 
@@ -64,7 +62,7 @@ Traditional attendance marking methods (paper registers, roll calls, manual sign
 - ✅ Local time display (UTC+5:30) throughout the app
 - ✅ `DEMO_MODE` firmware flag for safe testing without affecting live timetable data
 - ✅ Admin panel for student, lecturer, and timetable management
-- ✅ Live deployment on PythonAnywhere
+- ✅ Deployed on PythonAnywhere for evaluation
 
 ---
 
@@ -73,24 +71,24 @@ Traditional attendance marking methods (paper registers, roll calls, manual sign
 ```
 mini_project/
 ├── app.py                 # Flask application factory
-├── config.py               # App configuration
-├── extensions.py           # Flask extensions (db, etc.)
-├── models.py                # SQLAlchemy database models
+├── config.py              # App configuration
+├── extensions.py          # Flask extensions (db, etc.)
+├── models.py              # SQLAlchemy database models
 ├── requirements.txt
-├── schema.sql                # Database schema reference
-├── routes/                   # Blueprints
+├── schema.sql             # Database schema reference
+├── routes/                # Blueprints
 │   ├── auth.py
 │   ├── attendance.py
 │   ├── api.py
 │   └── admin.py
-├── templates/                # Jinja2 HTML templates
+├── templates/             # Jinja2 HTML templates
 ├── static/
-│   └── css/                    # style.css design system
+│   └── css/               # style.css design system
 ├── database/
-│   └── attendance.db          # SQLite DB (gitignored, persistent on server)
-├── firmware/                   # ESP32 Arduino code
+│   └── attendance.db      # SQLite DB (gitignored, persistent on server)
+├── firmware/              # ESP32 Arduino code
 │   └── main.ino
-├── PROJECT_LOG.md              # Running project context/decision log
+├── PROJECT_LOG.md         # Running project context/decision log
 └── README.md
 ```
 
@@ -122,7 +120,6 @@ The app will be available at `http://127.0.0.1:5000`.
 
 ## 📸 Screenshots
 
-
 | Login Page | Admin Dashboard |
 |---|---|
 | ![Login](screenshots/login.png) | ![Dashboard](screenshots/dashboard.png) |
@@ -143,7 +140,7 @@ The app will be available at `http://127.0.0.1:5000`.
 
 **Didula Gunaweera**
 Undergraduate, Wayamba University of Sri Lanka
-Contributed the full software side: Flask web application, database design, and ESP32–server communication logic.
+Contributed the full software side and the embedded firmware: Flask web application, database design, ESP32 firmware (Arduino/C++), and ESP32–server communication logic.
 
 🔗 [LinkedIn](https://www.linkedin.com/in/didula-gunaweera-3aa7a1381)
 🔗 [GitHub](https://github.com/didulah)
