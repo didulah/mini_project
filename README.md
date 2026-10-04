@@ -120,9 +120,13 @@ The app will be available at `http://127.0.0.1:5000`.
 
 ## 📸 Screenshots
 
-| Login Page | Admin Dashboard |
+| Login Page | Lecturer Dashboard |
 |---|---|
 | ![Login](screenshots/login.png) | ![Dashboard](screenshots/dashboard.png) |
+
+| View student's history | Admin pannel |
+|---|---|
+| ![View student's history](screenshots/history.png) | ![Admin pannel](screenshots/pannel.png) |
 
 | Live Attendance View | Student Report |
 |---|---|
