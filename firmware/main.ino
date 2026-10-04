@@ -43,11 +43,11 @@
 // ===================== USER CONFIG - CONFIRM BEFORE FLASHING =====================
 
 // ---- WiFi ----
-const char* WIFI_SSID     = "A06";       // TODO: confirm
-const char* WIFI_PASSWORD = "88888888";   // TODO: confirm
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";       // set your own before flashing
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";   // set your own before flashing
 
 // ---- Server ----
-const char* SERVER_HOST = "himasara.pythonanywhere.com"; // TODO: confirm - no trailing slash
+const char* SERVER_HOST = "your-server.example.com"; // your deployed server host - no trailing slash
 const bool  USE_HTTPS   = true;
 
 // ---- This device's fixed classroom/subject slot ----
